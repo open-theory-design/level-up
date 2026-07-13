@@ -218,6 +218,78 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 .day-cell.empty .mark { color: var(--line); }
 .day-cell.today { outline: 2px solid var(--primary); outline-offset: -1px; }
 
+/* Future days in the current week: visible but muted and non-interactive. */
+.day-cell.future { background: var(--bg-soft); opacity: 0.55; }
+.day-cell.future .dow { color: var(--ink-faint); }
+.day-cell.future .mark { color: var(--line); }
+
+/* ---------- Weekly-goal stars (full width, below the week calendar) ---------- */
+
+.week-stars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 22px;
+}
+.wk-goal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+.wk-goal .wk-star {
+  font-size: 30px;
+  line-height: 1;
+  color: #C6CDD6;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.wk-goal.on .wk-star {
+  color: var(--gold);
+  text-shadow: 0 1px 3px rgba(233, 196, 106, 0.5);
+}
+.wk-goal-label {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.wk-goal.on .wk-goal-label {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+/* ---------- Week navigation ---------- */
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+.week-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+.week-arrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--bg-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+.week-arrow:active { transform: scale(0.92); }
+.week-arrow:disabled { opacity: 0.3; cursor: default; }
+.week-arrow:not(:disabled):hover { background: var(--line); }
+
+/* The strip now sits directly under the week-nav row. */
+.week-nav + .day-strip { margin-top: 10px; }
+
 /* ---------- Big primary button ---------- */
 
 .btn-primary {

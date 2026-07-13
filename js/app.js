@@ -7,6 +7,7 @@
   var state = PFStore.load();
   var view = "dashboard";
   var flowIndex = 0;
+  var weekOffset = 0; // 0 = current week; negative = past weeks (day strip navigation)
   var flowStartReps = 0; // today's reps when the flow was opened (for celebration)
   var strengthOpen = false;
   var firedReminders = {}; // "YYYY-MM-DD HH:MM" -> true
@@ -272,6 +273,11 @@
     );
   }
 
+  // Monday of the week currently being viewed (weekOffset weeks from today's).
+  function viewedMonday() {
+    return PFStreak.addDays(PFStreak.mondayOf(today()), weekOffset * 7);
+  }
+
   function renderStreakCard(d) {
     var flakes = "";
     for (var i = 0; i < PFStreak.FREEZE_CAP; i++) {
@@ -289,34 +295,86 @@
             '<div class="freeze-progress">' + d.earnCounter + "/" + PFStreak.EARN_EVERY + " toward next freeze</div>" +
           "</div>" +
         "</div>" +
-        renderDayStrip(d) +
+        renderWeek(d) +
+        renderWeekStars(viewedMonday()) +
       "</div>"
     );
   }
 
-  // 7-day strip, Variant B: one row, required days normal weight, bonus days
-  // lighter. Reads the derived state map (same source as the heatmap). Tap any
-  // cell to retro-edit (cycle 0 -> 1x -> 2x -> 0).
-  function renderDayStrip(d) {
+  // Three full-width goal stars beneath the week calendar: go once, twice, or
+  // three times this week. Any day the flow is completed counts (no required-day
+  // restriction). Reflects the week currently in view.
+  var WEEK_STAR_LABELS = ["Go once", "Go twice", "Go 3×"];
+  function renderWeekStars(monday) {
+    var done = 0;
+    for (var i = 0; i < 7; i++) {
+      var e = state.dayLog[PFStreak.addDays(monday, i)];
+      if (e && (e.reps || 0) >= 1) done += 1;
+    }
+    var filled = Math.min(3, done);
+    var items = "";
+    for (var s = 0; s < 3; s++) {
+      var on = s < filled;
+      items +=
+        '<div class="wk-goal' + (on ? " on" : "") + '">' +
+          '<span class="wk-star">★</span>' +
+          '<span class="wk-goal-label">' + WEEK_STAR_LABELS[s] + "</span>" +
+        "</div>";
+    }
+    return '<div class="week-stars" role="img" aria-label="' + done +
+      ' of 3 sessions completed this week">' + items + "</div>";
+  }
+
+  // Friendly Mon–Sun range, e.g. "Jun 30 – Jul 6" (month omitted on the end when
+  // the week doesn't cross a month boundary: "Jul 6 – 12").
+  function weekRangeLabel(monday) {
+    var sun = PFStreak.addDays(monday, 6);
+    var m1 = new Date(monday + "T12:00:00");
+    var m2 = new Date(sun + "T12:00:00");
+    var a = MONTHS[m1.getMonth() + 1] + " " + m1.getDate();
+    var b = (m1.getMonth() === m2.getMonth() ? "" : MONTHS[m2.getMonth() + 1] + " ") + m2.getDate();
+    return a + " – " + b;
+  }
+
+  // Fixed Monday→Sunday week, Variant B: required days normal weight, bonus days
+  // lighter. Reads the derived state map (same source as the heatmap). Tap a past
+  // or present cell to retro-edit (cycle 0 -> 1x -> 2x -> 0); future days in the
+  // current week are shown muted and are not interactive. ‹ › move between weeks.
+  function renderWeek(d) {
     var t = today();
+    var monday = viewedMonday();
+    var label = weekOffset === 0 ? "This week"
+      : weekOffset === -1 ? "Last week"
+      : weekRangeLabel(monday);
+    var nav =
+      '<div class="week-nav">' +
+        '<button class="week-arrow" data-action="week-prev" aria-label="Previous week">‹</button>' +
+        '<span class="week-label">' + esc(label) + "</span>" +
+        '<button class="week-arrow" data-action="week-next" aria-label="Next week"' +
+          (weekOffset >= 0 ? " disabled" : "") + ">›</button>" +
+      "</div>";
+
     var cells = "";
-    for (var i = 6; i >= 0; i--) {
-      var date = PFStreak.addDays(t, -i);
+    for (var i = 0; i < 7; i++) {
+      var date = PFStreak.addDays(monday, i);
       var st = PFStreak.stateForDate(d, date, t);
+      var future = date > t;
       var cls = "day-cell " + (PFStreak.isRequired(date) ? "req" : "bonus");
       var mark = "·";
       if (st === "gold") { cls += " done2"; mark = "✓✓"; }
       else if (st === "required-done" || st === "bonus-done") { cls += " done1"; mark = "✓"; }
       else if (st === "freeze") { cls += " frozen"; mark = "❄"; }
+      else if (future) { cls += " future"; }
       else cls += " empty";
       if (date === t) cls += " today";
-      cells +=
-        '<button class="' + cls + '" data-action="cycle-day" data-date="' + date + '" ' +
-        'aria-label="' + date + '">' +
-        '<span class="dow">' + DOW_LETTERS[PFStreak.weekdayOf(date)] + "</span>" +
-        '<span class="mark">' + mark + "</span></button>";
+      var dow = '<span class="dow">' + DOW_LETTERS[PFStreak.weekdayOf(date)] + "</span>";
+      var body = dow + '<span class="mark">' + mark + "</span>";
+      cells += future
+        ? '<div class="' + cls + '" aria-label="' + date + '">' + body + "</div>"
+        : '<button class="' + cls + '" data-action="cycle-day" data-date="' + date + '" ' +
+          'aria-label="' + date + '">' + body + "</button>";
     }
-    return '<div class="day-strip">' + cells + "</div>";
+    return nav + '<div class="day-strip">' + cells + "</div>";
   }
 
   // Small leading thumbnail for each list row, following the active image
@@ -817,6 +875,7 @@
     } else {
       timingCommit();
       save();
+      weekOffset = 0; // snap the strip back to the current week to show today's completion
       view = "dashboard";
       render();
       toast(e.reps >= 2 ? "Gold day — full flow ×2 ✓✓" : "Day complete ✓ Streak +1");
@@ -927,6 +986,8 @@
         toast("Timing data reset");
       }
     }
+    else if (a === "week-prev") { weekOffset -= 1; render(); }
+    else if (a === "week-next") { if (weekOffset < 0) { weekOffset += 1; render(); } }
     else if (a === "cycle-day") cycleDay(btn.dataset.date);
     else if (a === "cycle-exercise") cycleExercise(btn.dataset.ex);
     else if (a === "toggle-strength") { strengthOpen = !strengthOpen; render(); }
