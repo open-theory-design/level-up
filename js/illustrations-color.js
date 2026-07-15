@@ -8,11 +8,11 @@
 
   var SKIN = "#E9B48D";
   var HAIR = "#2B2F38";
-  var TOP = "#2B4C7E";  // tank top (slate)
+  var TOP = "#0C6B66";  // tank top (deep teal)
   var BOT = "#0FB0A2";  // shorts (teal)
   var SHOE = "#22303F";
   var PROP = "#D9DFE4";  // walls, tables, benches
-  var ACC = "#00A896";  // motion arrows
+  var ACC = "#15AFA6";  // motion arrows (turquoise)
   var FLOOR = "#E2E7EB";
 
   function limb(d, color, w) {
@@ -101,8 +101,10 @@
       arrow("M180 90 L164 90 L150 90")             // push back
     ),
 
-    // 6. External Rotations — elbow tucked at side, forearm rotating out.
-    external_rotations: svg(
+    // 6. Band Raises. NOTE: this drawing still depicts external rotations (elbow
+    // tucked, forearm rotating out) — it does not match the "Band Raises" name/cue
+    // or the line-art set. Redraw to both-arms-overhead-with-band to fully match.
+    band_raises: svg(
       floor() +
       '<rect x="198" y="18" width="9" height="134" rx="3" fill="' + PROP + '"/>' +
       head(146, 48, 15, 1) +

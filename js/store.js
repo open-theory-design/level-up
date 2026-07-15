@@ -32,7 +32,8 @@
         remindersEnabled: true,
         reminderTimes: ["11:00", "15:00"],
         timingEnabled: true, // when on at finish, the flow's duration is recorded
-        celebration: "stamp" // off | stamp | confetti | ripple (day-completion animation)
+        celebration: "stamp", // off | stamp | confetti | ripple (day-completion animation)
+        theme: "light" // "light" | "dark" — applied via <html data-theme>
       },
       // dayLog: { "YYYY-MM-DD": { reps: 0|1|2, exercisesDone: {exId: 0|1|2}, updatedAt } }
       dayLog: {},
@@ -46,6 +47,38 @@
       // Union-merged on sync (never un-see a badge).
       badgesSeen: []
     };
+  }
+
+  // One-time exercise-id migrations (old id -> new id). Exercise ids are stored
+  // keys in dayLog[*].exercisesDone and timing.ex, so a rename must remap the
+  // saved data or that history orphans. Idempotent: once old keys are gone it's
+  // a no-op. Runs in load() and after mergeRemote() (remote rows may carry old
+  // keys until every device has re-pushed).
+  var ID_RENAMES = { external_rotations: "band_raises" };
+
+  // Returns true if anything was remapped (so the caller can persist the result).
+  function migrateIds(state) {
+    if (!state) return false;
+    var changed = false;
+    Object.keys(ID_RENAMES).forEach(function (oldId) {
+      var newId = ID_RENAMES[oldId];
+      Object.keys(state.dayLog || {}).forEach(function (date) {
+        var done = state.dayLog[date] && state.dayLog[date].exercisesDone;
+        if (done && done[oldId] != null) {
+          done[newId] = Math.max(done[newId] || 0, done[oldId]);
+          delete done[oldId];
+          changed = true;
+        }
+      });
+      var ex = state.timing && state.timing.ex;
+      if (ex && ex[oldId]) {
+        var o = ex[oldId], n = ex[newId];
+        ex[newId] = n ? { ms: n.ms + o.ms, n: n.n + o.n } : o;
+        delete ex[oldId];
+        changed = true;
+      }
+    });
+    return changed;
   }
 
   function emptyTiming() {
@@ -72,6 +105,7 @@
         s.timing = Object.assign(emptyTiming(), s.timing || {});
         s.timingUpdatedAt = s.timingUpdatedAt || d.timingUpdatedAt;
         s.badgesSeen = s.badgesSeen || [];
+        if (migrateIds(s)) localStorage.setItem(LS_KEY, JSON.stringify(s)); // persist the remap
         return s;
       }
     } catch (e) { /* corrupted state -> start fresh */ }
@@ -245,11 +279,44 @@
       });
     });
     state.strengthLog.sort(function (a, b) { return a.loggedAt < b.loggedAt ? -1 : 1; });
+    migrateIds(state); // remap any old-id keys pulled from remote; caller save()s after
     return state;
+  }
+
+  // ---------------- Web Push subscriptions ----------------
+  // The endpoint row is what the send-reminders Edge Function iterates over.
+  // Timezone is captured here so the server can evaluate reminder times in
+  // this device's local clock.
+
+  function savePushSubscription(state, sub) {
+    if (!client || !sub) return Promise.resolve(false);
+    var json = sub.toJSON ? sub.toJSON() : sub;
+    return client.from("push_subscriptions").upsert({
+      endpoint: json.endpoint,
+      sync_code: state.syncCode,
+      p256dh: (json.keys || {}).p256dh,
+      auth: (json.keys || {}).auth,
+      tz: (Intl.DateTimeFormat().resolvedOptions().timeZone) || "UTC"
+    }).then(function (res) { return !res.error; });
+  }
+
+  function deletePushSubscription(endpoint) {
+    if (!client || !endpoint) return Promise.resolve(false);
+    return client.from("push_subscriptions").delete().eq("endpoint", endpoint)
+      .then(function (res) { return !res.error; });
+  }
+
+  // URL of the send-reminders function (for the in-app test button).
+  function pushFunctionUrl() {
+    if (!cfg.SUPABASE_URL) return null;
+    return cfg.SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/send-reminders";
   }
 
   window.PFStore = {
     load: load,
+    savePushSubscription: savePushSubscription,
+    deletePushSubscription: deletePushSubscription,
+    pushFunctionUrl: pushFunctionUrl,
     save: function (state) {
       localStorage.setItem(LS_KEY, JSON.stringify(state));
       if (client) {

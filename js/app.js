@@ -119,6 +119,11 @@
   var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" ' +
     'stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
+  // Back arrow as an SVG (centered in its viewBox) — the "←" text glyph has
+  // uneven side-bearings and renders visibly off-center inside the round button.
+  var BACK_SVG = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/>' +
+    '<path d="M11 6l-6 6 6 6"/></svg>';
   var celebrateTimer = null;
 
   function clearCelebrate() {
@@ -128,7 +133,7 @@
   }
 
   function confettiHTML(gold) {
-    var colors = gold ? ["#E9C46A", "#00A896", "#F1D488"] : ["#00A896", "#2A9D8F", "#E9C46A"];
+    var colors = gold ? ["#E9BC4F", "#15AFA6", "#F3DFA1"] : ["#15AFA6", "#0F9C94", "#E9BC4F"];
     var out = "";
     for (var i = 0; i < 26; i++) {
       var dx = Math.round((Math.random() * 2 - 1) * 150);
@@ -260,7 +265,7 @@
     return (
       '<div class="pf-header">' +
         '<div class="pf-logo">' +
-          '<svg width="26" height="26" viewBox="0 0 26 26"><rect width="26" height="26" rx="7" fill="#2B4C7E"/><path d="M7.5 14 L13 8.5 L18.5 14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 19 L13 13.5 L18.5 19" fill="none" stroke="#00A896" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+          '<svg width="26" height="26" viewBox="0 0 26 26"><rect width="26" height="26" rx="7" fill="#0C6B66"/><path d="M7.5 14 L13 8.5 L18.5 14" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 19 L13 13.5 L18.5 19" fill="none" stroke="#3ED5C8" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
           "Level Up" +
         "</div>" +
         '<div class="header-actions">' +
@@ -304,7 +309,7 @@
   // Three full-width goal stars beneath the week calendar: go once, twice, or
   // three times this week. Any day the flow is completed counts (no required-day
   // restriction). Reflects the week currently in view.
-  var WEEK_STAR_LABELS = ["Go once", "Go twice", "Go 3×"];
+  var WEEK_STAR_LABELS = ["1st", "2nd", "3rd"];
   function renderWeekStars(monday) {
     var done = 0;
     for (var i = 0; i < 7; i++) {
@@ -412,6 +417,7 @@
         '<div class="card-title">Daily posture flow</div>' +
         '<button class="btn-primary" data-action="start-flow">Start daily flow</button>' +
         '<div class="checklist">' + items + "</div>" +
+        '<div class="flow-note">These are general movement cues, not medical advice — move gently and stop if anything hurts.</div>' +
       "</div>"
     );
   }
@@ -509,6 +515,24 @@
   // The whole screen is a tap-to-advance target (data-action="flow-advance").
   // Inner controls carry their own data-action, so event delegation's
   // closest() picks them first — the Back and Close buttons never advance.
+  // Skim-friendly form cues: a "Do" group (green ✓) and an optional "Avoid"
+  // group (red ✕). Bare glyphs, no circles. Backward-compatible with a plain
+  // `cue` string if tips/avoid aren't present.
+  function tipGroup(label, items, kind) {
+    if (!items || !items.length) return "";
+    var rows = items.map(function (t) {
+      return '<div class="tip-item ' + kind + '"><span class="tip-ic">' +
+        (kind === "avoid" ? "✕" : "✓") + "</span><span>" + esc(t) + "</span></div>";
+    }).join("");
+    return '<div class="tip-group"><div class="tip-label">' + label + "</div>" + rows + "</div>";
+  }
+  function renderFlowTips(ex) {
+    if ((!ex.tips || !ex.tips.length) && !ex.avoid) {
+      return ex.cue ? '<div class="tip-group">' + tipGroup("Do", [ex.cue], "do") + "</div>" : "";
+    }
+    return tipGroup("Do", ex.tips, "do") + tipGroup("Avoid", ex.avoid, "avoid");
+  }
+
   function renderFlow() {
     var ex = PF_EXERCISES[flowIndex];
     var lastOne = flowIndex === PF_EXERCISES.length - 1;
@@ -539,8 +563,8 @@
         '<div class="flow-body">' +
           '<div class="flow-img">' + imageFor(ex) + "</div>" +
           '<h2 class="flow-name">' + esc(ex.name) + "</h2>" +
-          (showDose ? '<div class="flow-dose">' + esc(ex.dose) + "</div>" : "") +
-          '<p class="flow-cue">' + esc(ex.cue) + "</p>" +
+          (showDose ? '<div class="flow-reps">' + esc(ex.dose) + "</div>" : "") +
+          renderFlowTips(ex) +
         "</div>" +
         '<div class="flow-hint">Tap anywhere, or press → / space. Press ← to go back.</div>' +
         '<div class="flow-actions">' +
@@ -719,7 +743,7 @@
     }).join("");
 
     return (
-      '<div class="subnav"><button class="back" data-action="goto" data-view="dashboard">←</button><h2>Lifetime stats</h2></div>' +
+      '<div class="subnav"><button class="back" data-action="goto" data-view="dashboard" aria-label="Back">' + BACK_SVG + '</button><h2>Lifetime stats</h2></div>' +
       '<div class="card">' + topStats + "</div>" +
       renderHeatmapCard(d) +
       renderBadgesCard(d) +
@@ -772,7 +796,7 @@
     }).join(" ");
 
     return (
-      '<div class="subnav"><button class="back" data-action="goto" data-view="dashboard">←</button><h2>Settings</h2></div>' +
+      '<div class="subnav"><button class="back" data-action="goto" data-view="dashboard" aria-label="Back">' + BACK_SVG + '</button><h2>Settings</h2></div>' +
 
       '<div class="card"><div class="card-title">Sync</div>' +
         '<div class="sync-code-big">' + esc(state.syncCode) + "</div>" +
@@ -783,6 +807,14 @@
               '<button data-action="join-code">Sync device</button>' +
             "</div>"
           : '<div class="local-note"><strong>Local-only mode.</strong> Supabase isn’t configured in config.js, so data lives on this device only. See DEPLOY.md to enable phone ↔ desktop sync.</div>') +
+      "</div>" +
+
+      '<div class="card"><div class="card-title">Appearance</div>' +
+        '<div class="set-row col"><span class="set-label">Theme</span>' +
+          '<div class="seg">' +
+            '<button class="' + (s.theme !== "dark" ? "on" : "") + '" data-action="set-theme" data-theme-val="light">Light</button>' +
+            '<button class="' + (s.theme === "dark" ? "on" : "") + '" data-action="set-theme" data-theme-val="dark">Dark</button>' +
+          "</div></div>" +
       "</div>" +
 
       '<div class="card"><div class="card-title">Exercise images</div>' +
@@ -806,19 +838,177 @@
           "</div></div>" +
       "</div>" +
 
-      '<div class="card"><div class="card-title">In-app reminders</div>' +
-        '<div class="set-row"><span class="set-label">Reminders' +
-          '<span class="set-sub">Fire while the app is open — closed-app push is out of scope for v1</span></span>' +
+      '<div class="card"><div class="card-title">Reminders &amp; notifications</div>' +
+        '<div class="set-row"><span class="set-label">In-app reminders' +
+          '<span class="set-sub">Fire while the app is open</span></span>' +
           '<button class="toggle' + (s.remindersEnabled ? " on" : "") + '" data-action="toggle-reminders" role="switch" aria-checked="' + s.remindersEnabled + '" aria-label="Reminders"></button>' +
         "</div>" +
         '<div class="set-row"><span class="set-label">Times</span><span>' + times + "</span></div>" +
+        renderPushRow() +
       "</div>"
     );
   }
 
+  // The push row's states: unsupported browser -> note; permission denied ->
+  // note; otherwise a toggle (+ test button when subscribed). Pushes use the
+  // same times as in-app reminders, plus the required-day streak-saver.
+  function renderPushRow() {
+    if (!PFStore.isConfigured()) return ""; // local-only mode: no backend to push from
+    if (!pushSupported()) {
+      return '<div class="locked-note">Closed-app push isn’t supported in this browser</div>';
+    }
+    if (pushState.permission === "denied") {
+      return '<div class="set-row"><span class="set-label">Push to this device' +
+        '<span class="set-sub">Notifications are blocked — allow them in your browser’s site settings</span></span></div>';
+    }
+    var busy = pushState.busy || !pushState.checked;
+    var row =
+      '<div class="set-row"><span class="set-label">Push to this device' +
+        '<span class="set-sub">Reminder times + a streak-saver on required days — works with the app closed</span></span>' +
+        '<button class="toggle' + (pushState.subscribed ? " on" : "") + (busy ? " busy" : "") +
+          '" data-action="toggle-push" role="switch" aria-checked="' + pushState.subscribed +
+          '" aria-label="Push notifications"' + (busy ? " disabled" : "") + "></button>" +
+      "</div>";
+    if (pushState.subscribed) {
+      row += '<button class="btn-secondary btn-block" data-action="test-push">Send test notification</button>';
+    }
+    return row;
+  }
+
+  // ---------------- Web Push (closed-app notifications) ----------------
+
+  // UI state for the Settings push toggle. `checked` flips true after the
+  // first async probe so we don't flash the wrong state.
+  var pushState = { supported: false, permission: "default", subscribed: false, endpoint: null, busy: false, checked: false };
+
+  function pushSupported() {
+    return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  }
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64);
+    var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  // navigator.serviceWorker.ready can hang in some embedded browsers even when
+  // an active worker exists — prefer getRegistration() and only fall back to
+  // .ready for a genuinely fresh install.
+  function swReg() {
+    return navigator.serviceWorker.getRegistration().then(function (reg) {
+      if (reg && reg.active) return reg;
+      return navigator.serviceWorker.ready;
+    });
+  }
+
+  function withTimeout(p, ms) {
+    return Promise.race([p, new Promise(function (_, rej) {
+      setTimeout(function () { rej(new Error("timeout")); }, ms);
+    })]);
+  }
+
+  function refreshPushState() {
+    pushState.supported = pushSupported();
+    pushState.permission = ("Notification" in window) ? Notification.permission : "denied";
+    if (!pushState.supported) { pushState.checked = true; return; }
+    withTimeout(
+      swReg().then(function (reg) { return reg.pushManager.getSubscription(); }),
+      3000
+    )
+      .then(function (sub) {
+        var changed = pushState.subscribed !== !!sub || !pushState.checked;
+        pushState.subscribed = !!sub;
+        pushState.endpoint = sub ? sub.endpoint : null;
+        pushState.checked = true;
+        if (view === "settings" && changed) render();
+      })
+      .catch(function () {
+        // Probe failed or timed out — settle the UI rather than spin forever.
+        var first = !pushState.checked;
+        pushState.checked = true;
+        if (view === "settings" && first) render();
+      });
+  }
+
+  function enablePush() {
+    var key = (window.POSTUREFLOW_CONFIG || {}).VAPID_PUBLIC_KEY;
+    if (!key || key.indexOf("PASTE_") !== -1) { toast("Add VAPID_PUBLIC_KEY to config.js first"); return; }
+    pushState.busy = true; render();
+    Notification.requestPermission().then(function (perm) {
+      pushState.permission = perm;
+      if (perm !== "granted") { pushState.busy = false; render(); return; }
+      return swReg().then(function (reg) {
+        return reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(key)
+        });
+      }).then(function (sub) {
+        return PFStore.savePushSubscription(state, sub).then(function (ok) {
+          pushState.busy = false;
+          pushState.subscribed = ok;
+          pushState.endpoint = sub.endpoint;
+          if (!ok) { sub.unsubscribe(); toast("Couldn’t save the subscription (is the push table set up?)"); }
+          else toast("Push enabled on this device ✓");
+          render();
+        });
+      });
+    }).catch(function () {
+      pushState.busy = false;
+      toast("Push setup failed — see console");
+      render();
+    });
+  }
+
+  function disablePush() {
+    pushState.busy = true; render();
+    swReg()
+      .then(function (reg) { return reg.pushManager.getSubscription(); })
+      .then(function (sub) {
+        var endpoint = sub ? sub.endpoint : pushState.endpoint;
+        var done = sub ? sub.unsubscribe() : Promise.resolve(true);
+        return done.then(function () { return PFStore.deletePushSubscription(endpoint); });
+      })
+      .then(function () {
+        pushState.busy = false; pushState.subscribed = false; pushState.endpoint = null;
+        toast("Push disabled on this device");
+        render();
+      })
+      .catch(function () { pushState.busy = false; render(); });
+  }
+
+  function sendTestPush() {
+    var url = PFStore.pushFunctionUrl();
+    if (!url) return;
+    var key = (window.POSTUREFLOW_CONFIG || {}).SUPABASE_ANON_KEY;
+    toast("Sending test notification…");
+    fetch(url + "?test=1", {
+      method: "POST",
+      headers: { apikey: key, Authorization: "Bearer " + key }
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.status);
+      toast("Test sent — check your notifications");
+    }).catch(function () {
+      toast("Test failed — is the Edge Function deployed?");
+    });
+  }
+
   // ---------------- Render root ----------------
 
+  // Theme: reflect settings.theme onto <html data-theme> and keep the PWA
+  // status-bar colour in step. Runs on every render so remote-merged settings
+  // apply too.
+  function applyTheme() {
+    var dark = state.settings.theme === "dark";
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", dark ? "#0C1412" : "#0C6B66");
+  }
+
   function render() {
+    applyTheme();
     if (view === "flow") { app.innerHTML = renderFlow(); return; }
     if (view === "stats") { app.innerHTML = renderStats(); return; }
     if (view === "settings") { app.innerHTML = renderSettings(); return; }
@@ -955,7 +1145,11 @@
     if (!btn) return;
     var a = btn.dataset.action;
 
-    if (a === "goto") { view = btn.dataset.view; render(); }
+    if (a === "goto") {
+      view = btn.dataset.view;
+      if (view === "settings") refreshPushState(); // async; re-renders when it lands
+      render();
+    }
     else if (a === "start-flow") {
       flowIndex = 0;
       flowStartReps = (state.dayLog[today()] || {}).reps || 0;
@@ -994,6 +1188,11 @@
     else if (a === "log-warmup") logWarmup(btn.dataset.lift);
     else if (a === "log-lift") logLift(btn.dataset.lift, btn.closest("[data-lift-row]"));
     else if (a === "join-code") joinCode();
+    else if (a === "set-theme") {
+      state.settings.theme = btn.dataset.themeVal;
+      state.settingsUpdatedAt = new Date().toISOString();
+      save(); render();
+    }
     else if (a === "set-images") {
       state.settings.imageStyle = btn.dataset.style;
       state.settingsUpdatedAt = new Date().toISOString();
@@ -1005,6 +1204,8 @@
       save(); render();
       celebrate("normal"); // preview the chosen style (no-op when "off")
     }
+    else if (a === "toggle-push") { if (pushState.subscribed) disablePush(); else enablePush(); }
+    else if (a === "test-push") sendTestPush();
     else if (a === "toggle-reminders") {
       state.settings.remindersEnabled = !state.settings.remindersEnabled;
       state.settingsUpdatedAt = new Date().toISOString();
@@ -1078,6 +1279,7 @@
   // ---------------- Startup sync ----------------
 
   initBadgeBaseline(); // adopt existing history as baseline — no retroactive flood
+  refreshPushState(); // warm the push-toggle state before Settings is opened
   render();
 
   if (PFStore.isConfigured()) {

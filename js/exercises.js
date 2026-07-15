@@ -6,9 +6,12 @@
 (function () {
   "use strict";
 
-  var S = 'fill="none" stroke="#2B4C7E" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"';
-  var T = 'fill="none" stroke="#00A896" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"';
-  var G = 'stroke="#D7DDE3" stroke-width="3" stroke-linecap="round"';
+  // Strokes render on --img-plate, which stays light in BOTH themes, so fixed
+  // hexes are safe here. Figure = deep teal, accent = spring green (Deep Teal &
+  // Spring palette).
+  var S = 'fill="none" stroke="#0C6B66" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"';
+  var T = 'fill="none" stroke="#15AFA6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"';
+  var G = 'stroke="#C9D6D0" stroke-width="3" stroke-linecap="round"';
 
   function svg(inner) {
     return '<svg viewBox="0 0 240 150" xmlns="http://www.w3.org/2000/svg" role="img">' + inner + "</svg>";
@@ -65,7 +68,7 @@
       '<path d="M82 44 L48 44 M48 44 l10 -6 M48 44 l10 6" ' + T + "/>"
     ),
     // Hold a band in both hands and raise/lower both arms together.
-    external_rotations: svg(
+    band_raises: svg(
       '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
       '<circle cx="120" cy="38" r="11" ' + S + "/>" +
       '<path d="M120 49 L120 96" ' + S + "/>" +
@@ -92,7 +95,7 @@
       '<path d="M84 94 L84 132 M156 94 L156 132" ' + S + "/>" +      // fore/hind legs
       '<circle cx="72" cy="100" r="10" ' + S + "/>" +                // head down
       '<path d="M84 94 Q120 68 156 94" ' + S + "/>" +                // cat (arched up)
-      '<path d="M84 98 Q120 116 156 98" fill="none" stroke="#00A896" stroke-width="4" stroke-dasharray="7 8" stroke-linecap="round"/>' +  // cow (sag)
+      '<path d="M84 98 Q120 116 156 98" fill="none" stroke="#15AFA6" stroke-width="4" stroke-dasharray="7 8" stroke-linecap="round"/>' +  // cow (sag)
       '<path d="M120 76 L120 110 M120 76 l-5 8 M120 76 l5 8 M120 110 l-5 -8 M120 110 l5 -8" ' + T + "/>"
     ),
     planks: svg(
@@ -134,18 +137,18 @@
 
   // Daily flow — fixed, authoritative sequence (PRD §5.3).
   window.PF_EXERCISES = [
-    { id: "lat_stretch",        name: "Lat Stretch",                 dose: "self-paced",         cue: "Elbows on table, elbows tucked inward." },
-    { id: "pec_stretch",        name: "Pec Stretch",                 dose: "self-paced",         cue: "Keep shoulders down away from ears. Don’t force the joint." },
-    { id: "neck_stretch",       name: "Neck Stretch",                dose: "self-paced",         cue: "Drop the opposite arm all the way down, tilt head sideways, then gently twist chin downward." },
-    { id: "wall_angels",        name: "Wall Angels",                 dose: "self-paced",         cue: "Press your lower back flat against the wall. Don’t let your ribs flare out.", nicheStock: true },
-    { id: "chin_tucks",         name: "Chin Tucks",                  dose: "hold 3–5s",     cue: "Pull your head straight back like making a double chin." },
-    { id: "external_rotations", name: "Band Raises",                 dose: "self-paced",         cue: "Hold a band with both hands and raise both arms up, then lower with control. Keep the band under tension throughout.", nicheStock: true },
-    { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", cue: "Squeeze the glute of the stretching leg to push the hip forward. Don’t arch your lower back." },
-    { id: "cat_cow",            name: "Cat/Cow",                     dose: "10 slow transitions", cue: "Move slowly through your full spinal range of motion." },
-    { id: "planks",             name: "Planks / Half Side Planks",   dose: "3 × 30–45s", cue: "Tuck your tailbone, squeeze your glutes, pull elbows toward toes. No sagging lower back." },
-    { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 10 per side", cue: "Torso perfectly still like a tabletop. Move slowly." },
-    { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", cue: "Don’t rotate your torso. Isolate the burn to the side of your glute.", nicheStock: true },
-    { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  cue: "Drive through your heel. Keep your gaze forward, not at the ceiling." }
+    { id: "lat_stretch",        name: "Lat Stretch",                 dose: "self-paced",         tips: ["Rest your elbows on the table", "Sink your hips back", "Let your chest drop toward the floor", "Keep your ribs down"] },
+    { id: "pec_stretch",        name: "Pec Stretch",                 dose: "self-paced",         tips: ["Keep your shoulders down, away from your ears"], avoid: ["Forcing the joint"] },
+    { id: "neck_stretch",       name: "Neck Stretch",                dose: "self-paced",         tips: ["Drop the opposite arm down", "Tilt your head sideways", "Gently rotate your chin toward your armpit"], avoid: ["Pulling hard"] },
+    { id: "wall_angels",        name: "Wall Angels",                 dose: "self-paced",         tips: ["Press your lower back flat against the wall"], avoid: ["Letting your ribs flare out"], nicheStock: true },
+    { id: "chin_tucks",         name: "Chin Tucks",                  dose: "hold 3–5s",     tips: ["Pull your head straight back, like making a double chin"] },
+    { id: "band_raises",        name: "Band Raises",                 dose: "self-paced",         tips: ["Hold a band with both hands", "Raise both arms up, then lower with control", "Keep the band under tension throughout"], nicheStock: true },
+    { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", tips: ["Squeeze the glute of the stretching leg", "Push your hip forward"], avoid: ["Arching your lower back"] },
+    { id: "cat_cow",            name: "Cat/Cow",                     dose: "10 slow transitions", tips: ["Move slowly through your full spinal range", "Inhale as you drop your belly", "Exhale as you round your back"] },
+    { id: "planks",             name: "Planks / Half Side Planks",   dose: "3 × 30–45s", tips: ["Tuck your tailbone", "Squeeze your glutes", "Pull your elbows toward your toes"], avoid: ["Sagging your lower back"] },
+    { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 10 per side", tips: ["Keep your torso still, like a tabletop", "Move slowly"] },
+    { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", tips: ["Isolate the burn to the side of your glute"], avoid: ["Rotating your torso"], nicheStock: true },
+    { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  tips: ["Drive through your heel", "Keep your gaze forward"], avoid: ["Looking up at the ceiling"] }
   ];
 
   // Ad-hoc strength bank — fixed order, warm-up gate first (PRD §6).
