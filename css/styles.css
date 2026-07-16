@@ -40,11 +40,11 @@
 /* Dark theme: petrol-black base, teal-tinted cards, glowing teal-mint primary.
    Toggled from Settings via <html data-theme="dark">. */
 :root[data-theme="dark"] {
-  --bg: #16211E;
-  --bg-soft: #0C1412;
-  --ink: #ECF3F0;
-  --ink-soft: #A3B7B0;
-  --ink-faint: #62786F;
+  --bg: #1E2023;            /* cards — neutral charcoal */
+  --bg-soft: #0E0F11;       /* page — neutral near-black */
+  --ink: #EEEFF1;
+  --ink-soft: #AEB2B8;
+  --ink-faint: #70747A;
   --primary: #1FC2B4;
   --on-primary: #04231F;
   --teal: #22C7BB;
@@ -56,19 +56,19 @@
   --on-gold: #55420E;
   --gold-tint: #3A3118;
   --gold-border: #55471F;
-  --cell: #1D2A26;
-  --cell-mark: #46584F;
-  --star-empty: #3C4B45;
+  --cell: #282A2E;          /* neutral */
+  --cell-mark: #565A61;
+  --star-empty: #454951;
   --freeze: #152C3B;
   --freeze-ink: #6FB0DC;
   --freeze-border: #234763;
-  --line: #24332E;
+  --line: #33363B;          /* neutral */
   --danger: #F0785F;
-  --img-plate: #E9F1ED;
+  --img-plate: #EDEFF2;
   --hm-bonus: #2A665E;
   --hm-freeze: #2A4A66;
-  --hm-muted: #1D2A26;
-  --hm-future: #141E1B;
+  --hm-muted: #282A2E;
+  --hm-future: #17181B;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.3);
 }
 
