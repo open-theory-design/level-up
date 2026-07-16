@@ -98,12 +98,41 @@
       '<path d="M84 98 Q120 116 156 98" fill="none" stroke="#15AFA6" stroke-width="4" stroke-dasharray="7 8" stroke-linecap="round"/>' +  // cow (sag)
       '<path d="M120 76 L120 110 M120 76 l-5 8 M120 76 l5 8 M120 110 l-5 -8 M120 110 l5 -8" ' + T + "/>"
     ),
-    planks: svg(
+    // Dead bug: supine, knees stacked over hips (tabletop), opposite arm + leg
+    // reaching away while the low back stays pressed to the floor.
+    deadbugs: svg(
       '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
-      '<circle cx="60" cy="88" r="11" ' + S + "/>" +
-      '<path d="M70 96 L196 122" ' + S + "/>" +
-      '<path d="M78 98 L70 126 L48 126" ' + S + "/>" +
-      '<path d="M196 122 L206 132" ' + S + "/>"
+      '<circle cx="48" cy="120" r="10" ' + S + "/>" +               // head on the floor
+      '<path d="M58 122 L150 122" ' + S + "/>" +                    // spine flat on the floor
+      '<path d="M68 122 L74 84" ' + S + "/>" +                      // near arm straight up
+      '<path d="M68 122 L36 104" ' + S + "/>" +                     // opposite arm reaching back over head
+      '<path d="M150 122 L146 84 L174 88" ' + S + "/>" +            // near knee: thigh up + shin (tabletop)
+      '<path d="M150 122 L200 112" ' + S + "/>" +                   // opposite leg extended out
+      '<path d="M188 100 L188 82 M188 82 l-5 8 M188 82 l5 8" ' + T + "/>"  // slow, controlled lower/raise
+    ),
+    // Side plank: forearm on the floor, body a straight diagonal off the floor,
+    // hips lifted, top arm reaching up.
+    side_plank: svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M36 132 L74 132" ' + S + "/>" +                     // forearm on the floor
+      '<path d="M56 132 L66 104" ' + S + "/>" +                     // upper arm up to shoulder
+      '<circle cx="70" cy="94" r="10" ' + S + "/>" +                // head
+      '<path d="M76 102 L202 132" ' + S + "/>" +                    // straight body to feet on floor
+      '<path d="M82 100 L98 74" ' + S + "/>" +                      // top arm raised to the ceiling
+      '<path d="M122 108 L122 92 M122 92 l-5 8 M122 92 l5 8" ' + T + "/>"  // lift the hips
+    ),
+    // Couch stretch: half-kneeling, rear shin running up a wall/couch behind,
+    // torso tall, pelvis tucked under.
+    couch_stretch: svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M204 22 v112" ' + T + "/>" +                        // wall / couch back
+      '<circle cx="92" cy="50" r="11" ' + S + "/>" +                // head
+      '<path d="M92 61 L94 100" ' + S + "/>" +                      // torso upright
+      '<path d="M94 100 L70 118 L70 134" ' + S + "/>" +             // front leg planted
+      '<path d="M94 100 L150 126" ' + S + "/>" +                    // rear thigh to knee on floor
+      '<path d="M150 126 L198 96" ' + S + "/>" +                    // rear shin up the wall
+      '<path d="M93 70 L116 104" ' + S + "/>" +                     // arm resting on front thigh
+      '<path d="M93 70 L76 96" ' + S + "/>"                         // other arm
     ),
     bird_dogs: svg(
       '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
@@ -144,8 +173,10 @@
     { id: "chin_tucks",         name: "Chin Tucks",                  dose: "hold 3–5s",     tips: ["Pull your head straight back, like making a double chin"] },
     { id: "band_raises",        name: "Band Raises",                 dose: "self-paced",         tips: ["Hold a band with both hands", "Raise both arms up, then lower with control", "Keep the band under tension throughout"], nicheStock: true },
     { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", tips: ["Squeeze the glute of the stretching leg", "Push your hip forward"], avoid: ["Arching your lower back"] },
+    { id: "couch_stretch",      name: "Couch Stretch",               dose: "2 × 45s per leg", tips: ["Rest your rear shin flat up a wall or couch", "Front foot planted, knee over ankle", "Squeeze the glute and tuck your pelvis under"], avoid: ["Arching your lower back", "Forcing into sharp knee pain"] },
     { id: "cat_cow",            name: "Cat/Cow",                     dose: "10 slow transitions", tips: ["Move slowly through your full spinal range", "Inhale as you drop your belly", "Exhale as you round your back"] },
-    { id: "planks",             name: "Planks / Half Side Planks",   dose: "3 × 30–45s", tips: ["Tuck your tailbone", "Squeeze your glutes", "Pull your elbows toward your toes"], avoid: ["Sagging your lower back"] },
+    { id: "deadbugs",           name: "Dead Bugs",                   dose: "2 × 10 per side", tips: ["Press your lower back flat into the floor", "Lower the opposite arm and leg slowly", "Move with control and keep breathing"], avoid: ["Letting your lower back arch off the floor"] },
+    { id: "side_plank",         name: "Side Plank",                  dose: "2 × 20–30s per side", tips: ["Stack your feet and lift your hips high", "Hold a straight line from head to heels", "Push your bottom shoulder away from your ear"], avoid: ["Letting your hips sag toward the floor"] },
     { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 10 per side", tips: ["Keep your torso still, like a tabletop", "Move slowly"] },
     { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", tips: ["Isolate the burn to the side of your glute"], avoid: ["Rotating your torso"], nicheStock: true },
     { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  tips: ["Drive through your heel", "Keep your gaze forward"], avoid: ["Looking up at the ceiling"] }
