@@ -150,6 +150,12 @@ create policy "anon all" on push_log for all using (true) with check (true);
 -- RLS policies AND table grants are both required (see the note in §1):
 grant select, insert, update, delete on public.push_subscriptions to anon;
 grant select, insert, update, delete on public.push_log to anon;
+-- The Edge Function connects as service_role, which also needs grants on this
+-- project (it does NOT auto-grant new tables). Include the sync tables it reads:
+grant select, insert, update, delete on public.push_subscriptions to service_role;
+grant select, insert, update, delete on public.push_log to service_role;
+grant select on public.profile to service_role;
+grant select on public.day_log to service_role;
 ```
 
 ### 5.2 VAPID keys (once)
