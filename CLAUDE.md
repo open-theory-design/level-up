@@ -35,6 +35,19 @@ content (exercises → whatever is being tracked), and keep the architecture bel
   not raw `Date` arithmetic.
 - UI is string-templated HTML re-rendered on each change; escape any user-facing
   string with `esc()`.
+- **Theming is token-based.** Every colour lives in two blocks in `css/styles.css`:
+  `:root` (light) and `:root[data-theme="dark"]`; components reference variables
+  only — no hardcoded hex. The Settings toggle stamps `data-theme` and keeps the
+  `<meta name="theme-color">` in sync. Watch the leak points: inline SVGs (logo in
+  `js/app.js`, illustrations in `js/exercises.js`/`js/illustrations-color.js`),
+  confetti colours, `icon.svg`, and `manifest.json`.
+- **ID hygiene.** Exercise ids are stored keys (dayLog `exercisesDone`, timing). On a
+  rename, add a one-time idempotent migration in `PFStore` (`load()` + `mergeRemote()`)
+  — see `ID_RENAMES`. On a genuine swap (different exercise), retire the old id, no
+  migration.
+- **Service worker** (`sw.js`) is network-first; bump `CACHE` (`levelup-vN`) on any
+  asset change. Testing locally: in-app browsers serve stale JS — unregister the SW,
+  clear caches, and `fetch(cache:'reload')` before reload.
 
 ## ⚠️ Supabase setup gotcha (cost a real bug — do NOT skip)
 Enabling RLS + permissive policies is only **half** of Postgres permissions. The
@@ -46,8 +59,12 @@ with `42501 permission denied for table …` and the app silently shows
 alter table <t> enable row level security;
 create policy "anon all" on <t> for all using (true) with check (true);
 grant usage on schema public to anon;
-grant select, insert, update, delete on public.<t> to anon;   -- the easily-forgotten half
+grant select, insert, update, delete on public.<t> to anon;          -- web client
+grant select, insert, update, delete on public.<t> to service_role;  -- Edge Functions run as service_role
 ```
+
+Both grant halves bit us: `anon` for the web client, and `service_role` for the push
+Edge Function (this project does **not** auto-grant new tables).
 
 Debug a "silently won't sync" report by probing the REST API directly *before*
 touching app code:
@@ -62,12 +79,22 @@ curl "$SUPABASE_URL/rest/v1/profile?select=*&limit=1" \
 The `sb_publishable_…` anon key committed in `config.js` is safe to expose: data is
 scoped by the private sync code, not the key (an accepted MVP trade-off — see PRD).
 
+## Push notifications (closed-app)
+Web Push + VAPID → a **Supabase Edge Function** (`supabase/functions/send-reminders/`)
+→ scheduled by **pg_cron**. Fires at each device's local reminder times plus a
+streak-saver on required days. Idempotent via a `push_log` slot key; dead endpoints
+self-prune. VAPID public key in `config.js`; private key only in Edge Function
+secrets. Full setup in `DEPLOY.md §5`. Backend is platform-agnostic — iOS needs
+Home-Screen install + a user-gesture permission prompt (see `ONBOARDING.md §6`).
+
 ## Deploy
 Static host (Vercel or GitHub Pages). **Two independent systems:** the GitHub→Vercel
 pipeline ships *app code*; Supabase holds *data*. A DB change (like the grants above)
 is live immediately with no code push; a UI change needs commit + push + redeploy.
 
 ## Reference docs
+- `ONBOARDING.md` — **portable "build a derived tracking PWA" guide + lessons**; the
+  doc to copy into a sibling project.
 - `PostureFlow-PRD.md` — product spec (streak/freeze rules, views, data model)
-- `DEPLOY.md` — Supabase schema + hosting + PWA install walkthrough
+- `DEPLOY.md` — Supabase schema + grants + hosting + PWA install + push setup (§5)
 - `BUILD-SPEC-heatmap-milestones-celebrations.md` — heatmap / badges / celebration details

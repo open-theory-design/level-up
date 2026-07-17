@@ -119,9 +119,10 @@ last-write-wins per day/entry.
 
 Real push while the app is closed: Web Push (VAPID) sent by a **Supabase Edge
 Function**, scheduled by **pg_cron** every 5 minutes. Pushes fire at your
-configured reminder times, plus a streak-saver at 20:00 local on required days
-(Mon/Wed/Thu) when the flow isn't logged yet. All times are evaluated in each
-device's own timezone.
+configured reminder times, plus two evening (18:00 local) "at-risk" nudges: a
+**streak-saver** on required days (Mon/Wed/Thu) when the flow isn't logged yet,
+and a **weekly last-chance** on Sunday when you've done fewer than 3 sessions that
+week. All times are evaluated in each device's own timezone.
 
 ### 5.1 Database (SQL Editor → run once)
 

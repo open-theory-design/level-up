@@ -283,13 +283,17 @@
     return PFStreak.addDays(PFStreak.mondayOf(today()), weekOffset * 7);
   }
 
-  function renderStreakCard(d) {
+  function renderStreakCard(d, risk) {
     var flakes = "";
     for (var i = 0; i < PFStreak.FREEZE_CAP; i++) {
       flakes += '<span class="' + (i < d.freezes ? "flake" : "flake-empty") + '">❄️</span>';
     }
+    // Apply the at-risk visual to the card. For the week trigger, only when the
+    // current week is in view (so the pulsing stars match what's shown).
+    var showRisk = risk && (risk.kind === "day" || weekOffset === 0);
+    var cardCls = "card" + (showRisk ? " at-risk at-risk-" + risk.kind + (risk.hot ? " hot" : "") : "");
     return (
-      '<div class="card">' +
+      '<div class="' + cardCls + '">' +
         '<div class="streak-block">' +
           "<div>" +
             '<div class="streak-num">' + d.streak + "</div>" +
@@ -309,13 +313,20 @@
   // Three full-width goal stars beneath the week calendar: go once, twice, or
   // three times this week. Any day the flow is completed counts (no required-day
   // restriction). Reflects the week currently in view.
-  var WEEK_STAR_LABELS = ["1st", "2nd", "3rd"];
-  function renderWeekStars(monday) {
+  // Count days in the Mon–Sun week starting `monday` with the flow done (reps>=1).
+  // Shared by the goal stars and the at-risk check so they never disagree.
+  function sessionsInWeek(monday) {
     var done = 0;
     for (var i = 0; i < 7; i++) {
       var e = state.dayLog[PFStreak.addDays(monday, i)];
       if (e && (e.reps || 0) >= 1) done += 1;
     }
+    return done;
+  }
+
+  var WEEK_STAR_LABELS = ["1st", "2nd", "3rd"];
+  function renderWeekStars(monday) {
+    var done = sessionsInWeek(monday);
     var filled = Math.min(3, done);
     var items = "";
     for (var s = 0; s < 3; s++) {
@@ -500,11 +511,51 @@
     );
   }
 
+  // ---------------- At-risk ("angry") attention state ----------------
+  // Two triggers, mutually exclusive (Sun isn't a required day):
+  //   week — Sunday & this week's sessions < 3
+  //   day  — required day (Mon/Wed/Thu), ≥6pm local, today's flow not done
+  // `hot` = escalated (from 6pm) → harder copy + faster pulse.
+  function riskState() {
+    var t = today();
+    var evening = (new Date()).getHours() >= 18; // ~6pm local
+    if (PFStreak.weekdayOf(t) === 0) { // Sunday
+      var wk = sessionsInWeek(PFStreak.mondayOf(t));
+      if (wk < 3) return { kind: "week", remaining: 3 - wk, hot: evening };
+    }
+    if (PFStreak.isRequired(t) && evening) {
+      var doneToday = ((state.dayLog[t] || {}).reps || 0) >= 1;
+      if (!doneToday) return { kind: "day", remaining: 1, hot: true };
+    }
+    return null;
+  }
+
+  // Full-width urgent banner (the whole thing is the "Start now" CTA).
+  function renderRiskBanner(risk) {
+    if (!risk) return "";
+    var msg;
+    if (risk.kind === "week") {
+      var s = risk.remaining === 1 ? "" : "s";
+      msg = risk.hot
+        ? "Last chance — " + risk.remaining + " session" + s + " left before the week resets."
+        : "It's Sunday — " + risk.remaining + " session" + s + " to go for your 3 this week.";
+    } else {
+      msg = "Your streak's on the line — today isn't done yet.";
+    }
+    return '<button class="risk-banner' + (risk.hot ? " hot" : "") + '" data-action="start-flow">' +
+      '<span class="risk-ic">⚠️</span>' +
+      '<span class="risk-msg">' + esc(msg) + "</span>" +
+      '<span class="risk-cta">Start now →</span>' +
+      "</button>";
+  }
+
   function renderDashboard() {
     var d = derived();
+    var risk = riskState();
     return (
       renderHeader() +
-      renderStreakCard(d) +
+      renderRiskBanner(risk) +
+      renderStreakCard(d, risk) +
       renderFlowCard() +
       renderStrengthCard()
     );

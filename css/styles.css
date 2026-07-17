@@ -310,6 +310,55 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   font-weight: 600;
 }
 
+/* ---------- At-risk ("angry") attention state ---------- */
+
+/* Urgent banner — the whole thing is the "Start now" CTA. */
+.risk-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--danger);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 13px 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+.risk-banner .risk-ic { font-size: 18px; flex: none; }
+.risk-banner .risk-msg { flex: 1; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.risk-banner .risk-cta { flex: none; font-size: 13px; font-weight: 800; white-space: nowrap; opacity: 0.95; }
+.risk-banner:active { transform: scale(0.99); }
+.risk-banner.hot { animation: risk-pulse 1.1s ease-in-out infinite; }
+
+/* Red edge on the streak card while at risk. */
+.card.at-risk { box-shadow: inset 4px 0 0 var(--danger), var(--shadow); }
+
+/* Pulse the thing that's actually at risk. */
+.at-risk-week .wk-goal:not(.on) .wk-star { color: var(--danger); }
+.at-risk-week .wk-goal:not(.on) .wk-star,
+.at-risk-day .streak-num,
+.at-risk-day .day-cell.today {
+  animation: risk-pulse 1.6s ease-in-out infinite;
+}
+.at-risk-day .day-cell.today { outline-color: var(--danger); }
+.at-risk-day.hot .streak-num,
+.at-risk-week.hot .wk-goal:not(.on) .wk-star { animation-duration: 0.9s; }
+
+@keyframes risk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* Accessibility: no motion for users who ask for less — keep the red, drop the pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .risk-banner.hot,
+  .at-risk-week .wk-goal:not(.on) .wk-star,
+  .at-risk-day .streak-num,
+  .at-risk-day .day-cell.today { animation: none; }
+}
+
 /* ---------- Week navigation ---------- */
 
 .week-nav {
@@ -1096,6 +1145,7 @@ input[type="time"] {
 .sync-join { display: flex; gap: 8px; margin-top: 10px; }
 .sync-join input {
   flex: 1;
+  min-width: 0;          /* allow the input to shrink so the button fits the card */
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 12px;
@@ -1110,6 +1160,8 @@ input[type="time"] {
   border-radius: 10px;
   padding: 0 18px;
   font-weight: 700;
+  flex: none;            /* don't let the input squeeze it */
+  white-space: nowrap;   /* keep "Sync device" on one line */
 }
 
 .local-note {

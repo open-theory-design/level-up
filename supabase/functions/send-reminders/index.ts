@@ -13,7 +13,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
-import { localNow, dueNotifications } from "./logic.js";
+import { localNow, dueNotifications, weekDates } from "./logic.js";
 
 webpush.setVapidDetails(
   Deno.env.get("VAPID_SUBJECT") ?? "mailto:joe@upheal.io",
@@ -81,13 +81,15 @@ Deno.serve(async (req) => {
     const times: string[] = profile?.settings?.reminderTimes ?? [];
     const remindersOn: boolean = profile?.settings?.remindersEnabled !== false;
 
-    // Streak-saver needs to know whether today's (logical-date) flow is done.
-    const { data: day } = await db
-      .from("day_log").select("reps")
-      .eq("sync_code", sub.sync_code).eq("log_date", local.logicalDate).maybeSingle();
-    const flowDone = (day?.reps ?? 0) >= 1;
+    // Streak-saver needs today's status; weekly last-chance needs the week's count.
+    const week = weekDates(local.logicalDate, local.logicalDow);
+    const { data: days } = await db
+      .from("day_log").select("log_date, reps")
+      .eq("sync_code", sub.sync_code).in("log_date", week);
+    const flowDone = (days ?? []).some((r) => r.log_date === local.logicalDate && (r.reps ?? 0) >= 1);
+    const weekSessions = (days ?? []).filter((r) => (r.reps ?? 0) >= 1).length;
 
-    const due = dueNotifications(local, remindersOn ? times : [], flowDone);
+    const due = dueNotifications(local, remindersOn ? times : [], flowDone, weekSessions);
     for (const n of due) {
       // Idempotency: first inserter of (endpoint, slot) wins; duplicates skip.
       const ins = await db.from("push_log").insert({ endpoint: sub.endpoint, slot: n.slot });

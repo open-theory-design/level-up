@@ -1,7 +1,7 @@
 // Level Up service worker — offline shell (PRD §2.2).
 // Static assets are cached; Supabase API calls always go to the network.
 
-var CACHE = "levelup-v8"; // bumped for turquoise + cool-grey palette
+var CACHE = "levelup-v9"; // bumped for at-risk banner + 6pm streak/weekly pushes
 var ASSETS = [
   "./",
   "./index.html",
