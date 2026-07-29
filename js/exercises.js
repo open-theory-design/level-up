@@ -78,6 +78,19 @@
       '<path d="M92 48 Q120 58 148 48" ' + T + "/>" +                 // band between hands
       '<path d="M170 46 L170 80 M170 46 l-5 8 M170 46 l5 8 M170 80 l-5 -8 M170 80 l5 -8" ' + T + "/>"
     ),
+    // Prone on forearms, roller under the front of one thigh; double arrow shows
+    // the slow back-and-forth travel from hip to just above the knee.
+    quad_roll: svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M30 134 L66 134" ' + S + "/>" +                      // forearm on the floor
+      '<path d="M50 134 L56 108" ' + S + "/>" +                      // upper arm to shoulder
+      '<circle cx="44" cy="104" r="10" ' + S + "/>" +                // head
+      '<path d="M56 108 L136 114" ' + S + "/>" +                     // torso, face-down
+      '<path d="M136 114 L182 124" ' + S + "/>" +                    // thigh resting on roller
+      '<path d="M182 124 L208 134" ' + S + "/>" +                    // shin to foot
+      '<circle cx="160" cy="127" r="7" ' + T + "/>" +                // the roller
+      '<path d="M124 92 L176 92 M124 92 l8 -5 M124 92 l8 5 M176 92 l-8 -5 M176 92 l-8 5" ' + T + "/>"
+    ),
     // Half-kneeling lunge; clean forward arrow for the hip drive.
     psoas_stretch: svg(
       '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
@@ -172,14 +185,15 @@
     { id: "wall_angels",        name: "Wall Angels",                 dose: "self-paced",         tips: ["Press your lower back flat against the wall"], avoid: ["Letting your ribs flare out"], nicheStock: true },
     { id: "chin_tucks",         name: "Chin Tucks",                  dose: "hold 3–5s",     tips: ["Pull your head straight back, like making a double chin"] },
     { id: "band_raises",        name: "Band Raises",                 dose: "self-paced",         tips: ["Hold a band with both hands", "Raise both arms up, then lower with control", "Keep the band under tension throughout"], nicheStock: true },
-    { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", tips: ["Squeeze the glute of the stretching leg", "Push your hip forward"], avoid: ["Arching your lower back"] },
-    { id: "couch_stretch",      name: "Couch Stretch",               dose: "2 × 45s per leg", tips: ["Rest your rear shin flat up a wall or couch", "Front foot planted, knee over ankle", "Squeeze the glute and tuck your pelvis under"], avoid: ["Arching your lower back", "Forcing into sharp knee pain"] },
+    { id: "quad_roll",          name: "Quad Foam Roll",              dose: "60–90s per leg",  track: { type: "hold", sets: 2, secs: 60, min: 45, max: 120 }, tips: ["Lie face-down with the roller under one thigh", "Roll slowly — 2–4 seconds per pass", "Work from the hip down to just above the knee", "Pause on tender spots and keep breathing", "Cross the other leg over the top for more pressure"], avoid: ["Rolling over your kneecap or hip bone", "Going past 2 minutes on one leg"] },
+    { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", track: { type: "hold", sets: 2, secs: 45, min: 30, max: 90 }, tips: ["Squeeze the glute of the stretching leg", "Push your hip forward"], avoid: ["Arching your lower back"] },
+    { id: "couch_stretch",      name: "Couch Stretch",               dose: "2 × 45s per leg", track: { type: "hold", sets: 2, secs: 45, min: 30, max: 90 }, tips: ["Rest your rear shin flat up a wall or couch", "Front foot planted, knee over ankle", "Squeeze the glute and tuck your pelvis under"], avoid: ["Arching your lower back", "Forcing into sharp knee pain"] },
     { id: "cat_cow",            name: "Cat/Cow",                     dose: "10 slow transitions", tips: ["Move slowly through your full spinal range", "Inhale as you drop your belly", "Exhale as you round your back"] },
-    { id: "deadbugs",           name: "Dead Bugs",                   dose: "2 × 10 per side", tips: ["Press your lower back flat into the floor", "Lower the opposite arm and leg slowly", "Move with control and keep breathing"], avoid: ["Letting your lower back arch off the floor"] },
-    { id: "side_plank",         name: "Side Plank",                  dose: "2 × 20–30s per side", tips: ["Stack your feet and lift your hips high", "Hold a straight line from head to heels", "Push your bottom shoulder away from your ear"], avoid: ["Letting your hips sag toward the floor"] },
-    { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 10 per side", tips: ["Keep your torso still, like a tabletop", "Move slowly"] },
-    { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", tips: ["Isolate the burn to the side of your glute"], avoid: ["Rotating your torso"], nicheStock: true },
-    { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  tips: ["Drive through your heel", "Keep your gaze forward"], avoid: ["Looking up at the ceiling"] }
+    { id: "deadbugs",           name: "Dead Bugs",                   dose: "2 × 10 per side", track: { type: "reps", sets: 2, target: 10 }, tips: ["Press your lower back flat into the floor", "Lower the opposite arm and leg slowly", "Move with control and keep breathing"], avoid: ["Letting your lower back arch off the floor"] },
+    { id: "side_plank",         name: "Side Plank",                  dose: "2 × 20–30s per side", track: { type: "hold", sets: 2, secs: 30, min: 15, max: 40 }, tips: ["Stack your feet and lift your hips high", "Hold a straight line from head to heels", "Push your bottom shoulder away from your ear"], avoid: ["Letting your hips sag toward the floor"] },
+    { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 10 per side", track: { type: "reps", sets: 2, target: 10 }, tips: ["Keep your torso still, like a tabletop", "Move slowly"] },
+    { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", track: { type: "reps", sets: 2, target: 15 }, tips: ["Isolate the burn to the side of your glute"], avoid: ["Rotating your torso"], nicheStock: true },
+    { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  track: { type: "reps", sets: 2, target: 12 }, tips: ["Drive through your heel", "Keep your gaze forward"], avoid: ["Looking up at the ceiling"] }
   ];
 
   // Ad-hoc strength bank — fixed order, warm-up gate first (PRD §6).
@@ -187,6 +201,7 @@
     { id: "ytw",        name: "YTWs",                                warmup: true },
     { id: "face_pull",  name: "Face Pulls",                          warmup: true },
     { id: "hip_thrust", name: "Weighted Hip Thrusts / Glute Bridges" },
+    { id: "bulgarian",  name: "Bulgarian Split Squats" },
     { id: "squat",      name: "Squats" },
     { id: "deadlift",   name: "Deadlifts" }
   ];

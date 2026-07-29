@@ -13,7 +13,7 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
-import { localNow, dueNotifications, weekDates } from "./logic.js";
+import { localNow, dueNotifications, weekDates, progressionFromRows } from "./logic.js";
 
 webpush.setVapidDetails(
   Deno.env.get("VAPID_SUBJECT") ?? "mailto:joe@upheal.io",
@@ -89,7 +89,14 @@ Deno.serve(async (req) => {
     const flowDone = (days ?? []).some((r) => r.log_date === local.logicalDate && (r.reps ?? 0) >= 1);
     const weekSessions = (days ?? []).filter((r) => (r.reps ?? 0) >= 1).length;
 
-    const due = dueNotifications(local, remindersOn ? times : [], flowDone, weekSessions);
+    // Progression: evaluate the last two logged sessions per tracked exercise.
+    const { data: setRows } = await db
+      .from("day_log").select("log_date, sets_log")
+      .eq("sync_code", sub.sync_code).not("sets_log", "is", null)
+      .order("log_date", { ascending: false }).limit(12);
+    const progression = progressionFromRows(setRows ?? [], profile?.settings?.holdSecs);
+
+    const due = dueNotifications(local, remindersOn ? times : [], flowDone, weekSessions, progression);
     for (const n of due) {
       // Idempotency: first inserter of (endpoint, slot) wins; duplicates skip.
       const ins = await db.from("push_log").insert({ endpoint: sub.endpoint, slot: n.slot });

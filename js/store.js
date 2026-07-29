@@ -171,6 +171,7 @@
         is_required: PFStreak.isRequired(d),
         freeze_used: !!derived.freezeDays[d],
         exercises_done: e.exercisesDone || {},
+        sets_log: e.sets || null, // per-exercise set data: { exId: { s:[...], diff } }
         updated_at: e.updatedAt || new Date().toISOString()
       };
     });
@@ -260,6 +261,7 @@
         state.dayLog[row.log_date] = {
           reps: row.reps || 0,
           exercisesDone: row.exercises_done || {},
+          sets: row.sets_log || undefined,
           updatedAt: remoteAt
         };
       }

@@ -181,6 +181,8 @@ The code lives in `supabase/functions/send-reminders/` (`index.ts` + `logic.js`)
   function exposes nothing beyond what the anon key can already do, and this
   keeps the cron/test calls simple).
 - **CLI:** `supabase functions deploy send-reminders --no-verify-jwt`
+- **After any change to the function's files** (e.g. new notification logic): repeat
+  the same paste-and-Deploy with the updated `index.ts` + `logic.js` from the repo.
 
 ### 5.4 Schedule it (SQL Editor)
 
@@ -221,7 +223,21 @@ select cron.schedule(
 > Home Screen via Safari (Share → Add to Home Screen) — enable the toggle from
 > inside the installed app, not the browser tab.
 
-## 6. Image styles
+## 6. Set tracking (reps + hold timers)
+
+Hip-group exercises log per-set data (reps done, seconds held, an optional
+difficulty rating) from the daily flow. The data lives in `day_log.sets_log`
+(jsonb) and syncs with the day row. **Run this once in the SQL Editor — before
+deploying an app version with the tracker,** or day pushes will silently fail
+until the column exists:
+
+```sql
+alter table day_log add column if not exists sets_log jsonb;
+```
+
+(Columns inherit the table's existing RLS + grants — no extra grants needed.)
+
+## 7. Image styles
 
 Three styles ship, switchable in Settings → *Image style*:
 

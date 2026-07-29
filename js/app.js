@@ -61,10 +61,11 @@
     "Posture check: drop your shoulders, tuck your chin.",
     "Desk break: stand up and squeeze your glutes for 10 seconds."
   ];
-  var LIFT_PLACEHOLDER_HINTS = { hip_thrust: [70, 10], squat: [80, 6], deadlift: [100, 5] };
+  var LIFT_PLACEHOLDER_HINTS = { hip_thrust: [70, 10], bulgarian: [20, 8], squat: [80, 6], deadlift: [100, 5] };
   // Section headers in the daily-flow list: exercises 1–6 target the rounded-
-  // shoulder "hunch" (upper crossed); 7–12 target the hips/glutes (lower
-  // crossed). The divide falls before the Kneeling Psoas Stretch (index 6).
+  // shoulder "hunch" (upper crossed); 7–15 target the hips/glutes (lower
+  // crossed). The divide falls before the Quad Foam Roll (index 6), which opens
+  // the hip block: soft tissue first, then the hip-flexor stretches.
   var FLOW_GROUPS = [
     { at: 0, label: "Posture & shoulders" },
     { at: 6, label: "Hips & glutes" }
@@ -418,7 +419,8 @@
       items +=
         '<button class="check-item s' + v + '" data-action="cycle-exercise" data-ex="' + ex.id + '">' +
           '<span class="check-thumb">' + thumbFor(ex) + "</span>" +
-          '<span class="check-main"><span class="check-name">' + esc(ex.name) + "</span>" +
+          '<span class="check-main"><span class="check-name">' + esc(ex.name) +
+            (progressionState(ex) ? ' <span class="up-chip" title="Ready to progress">↑</span>' : "") + "</span>" +
           '<span class="check-dose">' + esc(ex.dose) + "</span></span>" +
           '<span class="check-box">' + mark + "</span>" +
         "</button>";
@@ -584,6 +586,292 @@
     return tipGroup("Do", ex.tips, "do") + tipGroup("Avoid", ex.avoid, "avoid");
   }
 
+  // ---------------- Set tracker (hip strength: reps + hold timers) ----------------
+  // Exercises with a `track` field get an in-flow logger: type "reps" = two
+  // stepper rows (−/+/✓), type "hold" = a big-dial countdown with pause/reset,
+  // a Web-Audio chime and vibration at zero. Logged values live in
+  // dayLog[date].sets = { exId: { s: [v1, v2], diff } } and sync via sets_log.
+
+  var audioCtx = null; // created on the first Start tap (autoplay-safe)
+  function trackerAudioInit() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    } catch (e) { /* no audio — vibration still fires */ }
+  }
+  function trackerChime() {
+    if (audioCtx) {
+      try {
+        var t = audioCtx.currentTime;
+        [880, 1174.66].forEach(function (f, i) {
+          var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = "sine"; o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, t + i * 0.13);
+          g.gain.exponentialRampToValueAtTime(0.35, t + i * 0.13 + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.13 + 0.55);
+          o.connect(g); g.connect(audioCtx.destination);
+          o.start(t + i * 0.13); o.stop(t + i * 0.13 + 0.6);
+        });
+      } catch (e) { /* ignore */ }
+    }
+    if (navigator.vibrate) { try { navigator.vibrate(200); } catch (e) { /* ignore */ } }
+  }
+
+  var wakeLock = null;
+  function wakeLockOn() {
+    try {
+      if (navigator.wakeLock) navigator.wakeLock.request("screen").then(function (l) { wakeLock = l; }, function () {});
+    } catch (e) { /* unsupported — fine */ }
+  }
+  function wakeLockOff() {
+    try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) { /* ignore */ }
+  }
+
+  var repVals = {};   // exId -> [pending stepper value per set]
+  var holdRun = null; // { exId, set, endAt, pausedLeftMs, paused, timer, lastShown }
+
+  function stopHold() {
+    if (holdRun && holdRun.timer) clearInterval(holdRun.timer);
+    holdRun = null;
+    wakeLockOff();
+  }
+
+  function exerciseIds() { return PF_EXERCISES.map(function (x) { return x.id; }); }
+
+  function setsView(exId, n) { // logged values for today (null = not yet)
+    var e = state.dayLog[today()];
+    var rec = e && e.sets && e.sets[exId];
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(rec && rec.s && rec.s[i] != null ? rec.s[i] : null);
+    return out;
+  }
+  function allLogged(exId, n) {
+    return setsView(exId, n).every(function (v) { return v != null; });
+  }
+  function lastSetsFor(exId) { // most recent prior day with data for this exercise
+    var t = today();
+    for (var i = 1; i <= 60; i++) {
+      var e = state.dayLog[PFStreak.addDays(t, -i)];
+      var rec = e && e.sets && e.sets[exId];
+      if (rec && rec.s && rec.s.some(function (v) { return v != null; })) return rec;
+    }
+    return null;
+  }
+
+  // Effective hold length: per-exercise user override (±5s adjuster), clamped.
+  function holdSecsFor(ex) {
+    var tr = ex.track;
+    var v = (state.settings.holdSecs || {})[ex.id] || tr.secs;
+    return Math.min(tr.max || v, Math.max(tr.min || v, v));
+  }
+
+  // ---- Progression rules (keep in sync with supabase/functions/send-reminders/logic.js) ----
+  // Group A (control drills): the Felt tap is the signal — reps are weak data.
+  // Group B (loadable): top-of-range reps on both sets is required — add LOAD first.
+  // side_plank: time is capped at 40s; below it add time, at it progress the variation.
+  // Mobility holds (quad_roll, psoas, couch) never trigger progression.
+  var PROGRESSION_GROUP = { deadbugs: "A", bird_dogs: "A", clamshells: "B", hip_thrusts: "B", side_plank: "S" };
+  function progressionAdvice(exId, effSecs) {
+    return {
+      deadbugs: "Dead Bugs are getting easy — slow each lower to 4s or add a 2s pause. Don't add reps.",
+      bird_dogs: "Bird Dogs are getting easy — add a 3s pause at full reach, or slow the return.",
+      clamshells: "Clamshells: move up to the next band. Out of bands? Add a 2s squeeze at the top.",
+      hip_thrusts: "Hip Thrusts: time to add load — a dumbbell or plate across your hips.",
+      side_plank: effSecs >= 40
+        ? "Side Plank: 40s is the cap — progress the variation (top leg raised, or feet elevated)."
+        : "Side Plank: add 5 seconds — use the + under the timer."
+    }[exId] || null;
+  }
+  // lastTwo = the two most recent COMPLETED records [{s, diff}, …] (newest first).
+  function progressionFor(exId, lastTwo, meta) {
+    var group = PROGRESSION_GROUP[exId];
+    if (!group || !lastTwo || lastTwo.length < 2) return null;
+    var bothEasy = lastTwo.every(function (r) { return r.diff === "easy"; });
+    if (!bothEasy) return null;
+    if (group === "B") {
+      var atTarget = lastTwo.every(function (r) {
+        return r.s.every(function (v) { return v != null && v >= meta.target; });
+      });
+      if (!atTarget) return null;
+    }
+    return progressionAdvice(exId, meta.effSecs || 0);
+  }
+  // The last two completed sessions for an exercise (today included when complete).
+  function lastTwoSessions(exId, nSets) {
+    var out = [];
+    var t = today();
+    for (var i = 0; i <= 90 && out.length < 2; i++) {
+      var e = state.dayLog[PFStreak.addDays(t, -i)];
+      var rec = e && e.sets && e.sets[exId];
+      if (!rec || !rec.s) continue;
+      var complete = true;
+      for (var k = 0; k < nSets; k++) if (rec.s[k] == null) complete = false;
+      if (complete) out.push(rec);
+    }
+    return out;
+  }
+  function progressionState(ex) {
+    if (!ex.track) return null;
+    return progressionFor(ex.id, lastTwoSessions(ex.id, ex.track.sets), {
+      target: ex.track.target,
+      effSecs: ex.track.type === "hold" ? holdSecsFor(ex) : 0
+    });
+  }
+
+  function logSet(ex, idx, val) {
+    var e = dayEntry(today());
+    e.sets = e.sets || {};
+    e.sets[ex.id] = e.sets[ex.id] || { s: [] };
+    e.sets[ex.id].s[idx] = val;
+    if (allLogged(ex.id, ex.track.sets)) {
+      e.exercisesDone = e.exercisesDone || {};
+      e.exercisesDone[ex.id] = Math.max(e.exercisesDone[ex.id] || 0, 1);
+      e.reps = PFStreak.repsFromExercises(e.exercisesDone, exerciseIds());
+      toast(ex.name + " done ✓");
+    }
+    touch(e); save(); render();
+  }
+  function undoSet(ex, idx) {
+    var e = state.dayLog[today()];
+    var rec = e && e.sets && e.sets[ex.id];
+    if (!rec) return;
+    rec.s[idx] = null;
+    delete rec.diff;
+    // Sets no longer complete: un-tick, but never downgrade a gold (2×) mark.
+    if (e.exercisesDone && e.exercisesDone[ex.id] === 1) {
+      e.exercisesDone[ex.id] = 0;
+      e.reps = PFStreak.repsFromExercises(e.exercisesDone, exerciseIds());
+    }
+    touch(e); save(); render();
+  }
+
+  function tickHold() {
+    if (!holdRun || holdRun.paused) return;
+    var left = Math.max(0, Math.ceil((holdRun.endAt - Date.now()) / 1000));
+    if (left <= 0) {
+      var ex = PF_EXERCISES.filter(function (x) { return x.id === holdRun.exId; })[0];
+      var idx = holdRun.set;
+      var heldSecs = holdRun.secs;
+      stopHold();
+      trackerChime();
+      if (ex) logSet(ex, idx, heldSecs); // logSet re-renders
+      return;
+    }
+    if (left !== holdRun.lastShown) {
+      holdRun.lastShown = left;
+      if (view === "flow") render();
+    }
+  }
+  // Recompute immediately when the app comes back to the foreground (intervals
+  // are throttled/suspended in background — the timestamp math absorbs it).
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) tickHold();
+  });
+
+  function feltHTML(ex, rec) {
+    var diff = rec && rec.diff;
+    return '<div class="tk-felt"><span class="tk-felt-l">Felt:</span>' +
+      [["easy", "Too easy"], ["right", "Right"], ["hard", "Too hard"]].map(function (d) {
+        return '<button data-action="set-diff" data-d="' + d[0] + '" class="' + (diff === d[0] ? "on" : "") + '">' + d[1] + "</button>";
+      }).join("") + "</div>";
+  }
+
+  function trackerHint(ex) {
+    var last = lastSetsFor(ex.id);
+    if (!last) return "";
+    var tr = ex.track;
+    var unit = tr.type === "hold" ? "s" : "";
+    var vals = last.s.filter(function (v) { return v != null; });
+    var txt = "last: " + vals.map(function (v) { return v + unit; }).join(", ");
+    var bump = tr.type === "hold" ? 5 : 2;
+    var base = Math.max.apply(null, vals); // build the suggestion on what was actually done
+    if (last.diff === "easy") txt += " · felt easy → try " + (base + bump) + unit + "?";
+    if (last.diff === "hard") txt += " · felt hard → try " + Math.max(1, base - bump) + unit + "?";
+    return '<div class="tk-last">' + esc(txt) + "</div>";
+  }
+
+  function doneRow(i, text) {
+    return '<div class="tk-row done"><span class="tk-slabel">Set ' + (i + 1) + '</span>' +
+      '<span class="tk-res">✓ ' + text + "</span>" +
+      '<button class="tk-undo" data-action="set-undo" data-i="' + i + '" aria-label="Undo set ' + (i + 1) + '">✕</button></div>';
+  }
+
+  function renderTracker(ex) {
+    var tr = ex.track;
+    if (!tr) return "";
+    var n = tr.sets;
+    var viewSets = setsView(ex.id, n);
+    var complete = allLogged(ex.id, n);
+    var e = state.dayLog[today()];
+    var rec = e && e.sets && e.sets[ex.id];
+    var h = '<div class="tk" data-action="noop">' + trackerHint(ex);
+
+    if (tr.type === "reps") {
+      repVals[ex.id] = repVals[ex.id] || [];
+      for (var i = 0; i < n; i++) {
+        if (viewSets[i] != null) { h += doneRow(i, viewSets[i] + " reps"); continue; }
+        var locked = i > 0 && viewSets[i - 1] == null;
+        var val = repVals[ex.id][i] != null ? repVals[ex.id][i] : tr.target;
+        h += '<div class="tk-row' + (locked ? " locked" : "") + '"><span class="tk-slabel">Set ' + (i + 1) + "</span>" +
+          '<div class="tk-step">' +
+            '<button class="tk-btn" data-action="set-dec" data-i="' + i + '"' + (locked ? " disabled" : "") + ">−</button>" +
+            '<span class="tk-val">' + val + "</span>" +
+            '<button class="tk-btn" data-action="set-inc" data-i="' + i + '"' + (locked ? " disabled" : "") + ">+</button>" +
+            '<button class="tk-ok" data-action="set-log" data-i="' + i + '"' + (locked ? " disabled" : "") + ' aria-label="Log set ' + (i + 1) + '">✓</button>' +
+          "</div></div>";
+      }
+    } else {
+      // hold: big dial + controls
+      var eff = holdSecsFor(ex);
+      var running = holdRun && holdRun.exId === ex.id;
+      var runSecs = running ? holdRun.secs : eff;
+      var left = running
+        ? (holdRun.paused ? Math.max(0, Math.ceil(holdRun.pausedLeftMs / 1000)) : Math.max(0, Math.ceil((holdRun.endAt - Date.now()) / 1000)))
+        : eff;
+      var frac = running ? left / runSecs : 1;
+      var CIRC = 2 * Math.PI * 55;
+      h += '<div class="tk-dialwrap"><div class="tk-dial' + (running && holdRun.paused ? " paused" : "") + '">' +
+        '<svg width="132" height="132" viewBox="0 0 132 132">' +
+        '<circle class="ring-bg" cx="66" cy="66" r="55" fill="none" stroke-width="9"/>' +
+        '<circle class="ring-fg" cx="66" cy="66" r="55" fill="none" stroke-width="9" stroke-linecap="round" ' +
+          'stroke-dasharray="' + CIRC + '" stroke-dashoffset="' + (CIRC * (1 - frac)) + '"/>' +
+        "</svg>" +
+        '<div class="tk-secs"><b>' + left + "</b><i>" +
+          (running ? (holdRun.paused ? "paused" : "set " + (holdRun.set + 1)) : "seconds") + "</i></div>" +
+      "</div>";
+      // ±5s adjuster: only while idle, persisted per exercise (settings.holdSecs)
+      if (!running) {
+        h += '<div class="tk-adj">' +
+          '<button class="tk-btn" data-action="hold-dec"' + (eff <= (tr.min || 5) ? " disabled" : "") + ">−</button>" +
+          '<span class="tk-adj-l">' + eff + "s hold</span>" +
+          '<button class="tk-btn" data-action="hold-inc"' + (eff >= (tr.max || 600) ? " disabled" : "") + ">+</button>" +
+        "</div>";
+      }
+      h += '<div class="tk-ctrl">';
+      if (!running) {
+        var next = viewSets[0] == null ? 0 : (viewSets[1] == null ? 1 : -1);
+        if (next >= 0) h += '<button class="tk-start" data-action="hold-start" data-i="' + next + '">▶ Start set ' + (next + 1) + "</button>";
+      } else if (holdRun.paused) {
+        h += '<button class="tk-start" data-action="hold-pause">▶ Resume</button>' +
+             '<button class="tk-reset" data-action="hold-reset">↺ Reset</button>';
+      } else {
+        h += '<button class="tk-pause" data-action="hold-pause">⏸ Pause</button>' +
+             '<button class="tk-reset" data-action="hold-reset">↺ Reset</button>';
+      }
+      h += "</div></div>";
+      for (var j = 0; j < n; j++) {
+        if (viewSets[j] != null) h += doneRow(j, "held " + viewSets[j] + "s");
+      }
+    }
+
+    if (complete) {
+      var levelUp = progressionState(ex);
+      if (levelUp) h += '<div class="tk-levelup">⬆ ' + esc(levelUp) + "</div>";
+      h += '<div class="tk-done">' + esc(ex.name) + " done ✓</div>" + feltHTML(ex, rec);
+    }
+    return h + "</div>";
+  }
+
   function renderFlow() {
     var ex = PF_EXERCISES[flowIndex];
     var lastOne = flowIndex === PF_EXERCISES.length - 1;
@@ -611,13 +899,14 @@
           "</div>" +
         "</div>" +
         '<div class="flow-bar"><div style="width:' + pct + '%"></div></div>' +
-        '<div class="flow-body">' +
+        '<div class="flow-body' + (ex.track ? " tracked" : "") + '">' +
           '<div class="flow-img">' + imageFor(ex) + "</div>" +
           '<h2 class="flow-name">' + esc(ex.name) + "</h2>" +
           (showDose ? '<div class="flow-reps">' + esc(ex.dose) + "</div>" : "") +
           renderFlowTips(ex) +
+          (ex.track ? renderTracker(ex) : "") +
         "</div>" +
-        '<div class="flow-hint">Tap anywhere, or press → / space. Press ← to go back.</div>' +
+        (ex.track ? "" : '<div class="flow-hint">Tap anywhere, or press → / space. Press ← to go back.</div>') +
         '<div class="flow-actions">' +
           (notFirst ? '<button class="flow-prev-btn" data-action="flow-back">Back</button>' : "") +
           '<button class="flow-next' + (lastOne ? " finish" : "") + '" data-action="flow-advance">' +
@@ -1098,6 +1387,7 @@
   // as you step back onto one it's unticked. So "ticked" = exercises before the
   // current position, and the day completes when you finish the last one.
   function flowAdvance() {
+    stopHold(); // leaving the exercise cancels any running hold timer
     var e = dayEntry(today());
     e.exercisesDone = e.exercisesDone || {};
     var exIds = PF_EXERCISES.map(function (x) { return x.id; });
@@ -1127,6 +1417,7 @@
 
   function flowBack() {
     if (flowIndex <= 0) return;
+    stopHold(); // leaving the exercise cancels any running hold timer
     timingCloseSegment(); // bank time before leaving this exercise
     flowIndex -= 1;
     var ex = PF_EXERCISES[flowIndex];
@@ -1204,13 +1495,73 @@
     else if (a === "start-flow") {
       flowIndex = 0;
       flowStartReps = (state.dayLog[today()] || {}).reps || 0;
+      repVals = {}; // fresh stepper values each run
+      stopHold();
       timingStart();
       view = "flow";
       render();
     }
-    else if (a === "exit-flow") { flowTiming = null; view = "dashboard"; render(); }
+    else if (a === "exit-flow") { flowTiming = null; stopHold(); view = "dashboard"; render(); }
     else if (a === "flow-advance") flowAdvance();
     else if (a === "flow-back") flowBack();
+    else if (a === "noop") { /* tracker container: swallow the tap-to-advance */ }
+    else if (a === "set-dec" || a === "set-inc") {
+      var fx1 = PF_EXERCISES[flowIndex], i1 = +btn.dataset.i;
+      repVals[fx1.id] = repVals[fx1.id] || [];
+      var cur = repVals[fx1.id][i1] != null ? repVals[fx1.id][i1] : fx1.track.target;
+      repVals[fx1.id][i1] = Math.max(1, cur + (a === "set-inc" ? 1 : -1));
+      render();
+    }
+    else if (a === "set-log") {
+      var fx2 = PF_EXERCISES[flowIndex], i2 = +btn.dataset.i;
+      var v = (repVals[fx2.id] && repVals[fx2.id][i2] != null) ? repVals[fx2.id][i2] : fx2.track.target;
+      logSet(fx2, i2, v);
+    }
+    else if (a === "set-undo") { undoSet(PF_EXERCISES[flowIndex], +btn.dataset.i); }
+    else if (a === "hold-start") {
+      var fx3 = PF_EXERCISES[flowIndex];
+      var secs3 = holdSecsFor(fx3);
+      trackerAudioInit(); // user gesture: unlock audio for the end-of-hold chime
+      stopHold();
+      holdRun = {
+        exId: fx3.id, set: +btn.dataset.i, paused: false, secs: secs3,
+        endAt: Date.now() + secs3 * 1000,
+        pausedLeftMs: 0, lastShown: secs3,
+        timer: setInterval(tickHold, 250)
+      };
+      wakeLockOn();
+      render();
+    }
+    else if (a === "hold-dec" || a === "hold-inc") {
+      var fx5 = PF_EXERCISES[flowIndex], tr5 = fx5.track;
+      var cur5 = holdSecsFor(fx5) + (a === "hold-inc" ? 5 : -5);
+      cur5 = Math.min(tr5.max || 600, Math.max(tr5.min || 5, cur5));
+      state.settings.holdSecs = state.settings.holdSecs || {};
+      state.settings.holdSecs[fx5.id] = cur5;
+      state.settingsUpdatedAt = new Date().toISOString();
+      save(); render();
+    }
+    else if (a === "hold-pause") {
+      if (holdRun) {
+        if (holdRun.paused) { holdRun.endAt = Date.now() + holdRun.pausedLeftMs; holdRun.paused = false; }
+        else { holdRun.pausedLeftMs = Math.max(0, holdRun.endAt - Date.now()); holdRun.paused = true; }
+        render();
+      }
+    }
+    else if (a === "hold-reset") { stopHold(); render(); }
+    else if (a === "set-diff") {
+      var fx4 = PF_EXERCISES[flowIndex];
+      var e4 = dayEntry(today());
+      e4.sets = e4.sets || {};
+      e4.sets[fx4.id] = e4.sets[fx4.id] || { s: [] };
+      e4.sets[fx4.id].diff = e4.sets[fx4.id].diff === btn.dataset.d ? undefined : btn.dataset.d;
+      touch(e4); save(); render();
+      // The moment: tapping "easy" completes a 2nd-in-a-row qualifying session.
+      if (btn.dataset.d === "easy") {
+        var adv = progressionState(fx4);
+        if (adv) toast("⬆ " + adv);
+      }
+    }
     else if (a === "hm-cell") {
       var cap = document.getElementById("hm-caption");
       if (cap) cap.textContent = captionFor(btn.dataset.date, btn.dataset.state);
@@ -1289,6 +1640,7 @@
     } else if (k === "Escape") {
       ev.preventDefault();
       flowTiming = null;
+      stopHold();
       view = "dashboard";
       render();
     }

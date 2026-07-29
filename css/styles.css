@@ -576,7 +576,7 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start; /* top-aligned on every flow screen (tracked or not) */
   min-height: 0;
   text-align: left;
 }
@@ -650,6 +650,154 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   text-align: left;
   margin-top: 14px;
 }
+
+/* ---------- Set tracker (tracked flow screens) ---------- */
+
+/* Tracked screens compress the media + tips so image, tips, tracker and Next
+   all fit a ~412×900 viewport (Pixel-class) without scrolling; overflow-y is
+   the safety net for shorter phones. */
+.flow-body.tracked {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.flow-body.tracked .flow-img { padding: 8px; margin-bottom: 10px; }
+.flow-body.tracked .flow-img svg,
+.flow-body.tracked .flow-img img { max-height: 16vh; }
+.flow-body.tracked .flow-name { font-size: 21px; }
+.flow-body.tracked .flow-reps { margin-top: 4px; font-size: 12.5px; }
+.flow-body.tracked .tip-group { margin-top: 9px; }
+.flow-body.tracked .tip-group + .tip-group { margin-top: 7px; }
+.flow-body.tracked .tip-label { margin-bottom: 4px; }
+.flow-body.tracked .tip-item { font-size: 13px; margin-bottom: 4px; gap: 8px; }
+
+.tk { margin-top: 10px; }
+.tk-last { font-size: 12px; color: var(--ink-faint); margin-bottom: 7px; }
+
+.tk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  margin-bottom: 7px;
+  min-height: 50px;
+}
+.tk-row.locked { opacity: 0.45; }
+.tk-row.done { background: var(--success-tint); border-color: var(--success-border); }
+.tk-slabel { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); width: 38px; flex: none; }
+.tk-res { flex: 1; font-size: 14px; font-weight: 700; color: var(--green); }
+.tk-undo {
+  flex: none;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 800;
+}
+.tk-undo:active { color: var(--danger); }
+
+.tk-step { flex: 1; display: flex; align-items: center; gap: 8px; }
+.tk-btn {
+  width: 40px; height: 36px;
+  font-size: 19px; font-weight: 800;
+  color: var(--ink-soft);
+  background: var(--cell);
+  border-radius: 9px;
+}
+.tk-val { flex: 1; text-align: center; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.tk-ok {
+  width: 50px; height: 36px;
+  font-size: 16px; font-weight: 800;
+  color: var(--on-primary);
+  background: var(--primary);
+  border-radius: 9px;
+}
+.tk-btn:disabled, .tk-ok:disabled { opacity: 0.5; }
+
+/* hold dial */
+.tk-dialwrap { display: flex; flex-direction: column; align-items: center; margin: 2px 0 8px; }
+.tk-dial { position: relative; width: 132px; height: 132px; }
+.tk-dial svg { transform: rotate(-90deg); display: block; }
+.tk-dial .ring-bg { stroke: var(--cell); }
+.tk-dial .ring-fg { stroke: var(--teal); transition: stroke-dashoffset 0.2s linear; }
+.tk-dial.paused .ring-fg { stroke: var(--gold); }
+.tk-secs {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.tk-secs b { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.tk-secs i { font-style: normal; font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+.tk-ctrl { display: flex; gap: 8px; margin-top: 10px; width: 100%; }
+.tk-ctrl button {
+  flex: 1;
+  font-size: 14px; font-weight: 700;
+  border-radius: 10px;
+  padding: 11px 0;
+}
+/* Outline, not filled — the solid "Next" at the bottom stays the only primary CTA. */
+.tk-start {
+  background: transparent;
+  color: var(--primary);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.tk-start:active { background: var(--success-tint); }
+.tk-pause { background: var(--gold); color: var(--on-gold); }
+.tk-reset { background: var(--cell); color: var(--ink-soft); }
+
+/* ±5s hold-length adjuster (idle dial only) */
+.tk-adj {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.tk-adj .tk-btn { width: 36px; height: 30px; font-size: 16px; }
+.tk-adj-l { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* progression callout ("level up this exercise") */
+.tk-levelup {
+  background: var(--gold-tint);
+  border: 1px solid var(--gold-border);
+  color: var(--on-gold);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.45;
+  border-radius: 10px;
+  padding: 9px 11px;
+  margin: 3px 0 7px;
+}
+.up-chip {
+  display: inline-block;
+  color: var(--gold-ink);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+/* completion + felt (cleaned-up bottom) */
+.tk-done {
+  background: var(--success-tint);
+  border: 1px solid var(--success-border);
+  color: var(--green);
+  font-size: 13px; font-weight: 700;
+  text-align: center;
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 3px;
+}
+.tk-felt { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
+.tk-felt-l { flex: none; font-size: 11.5px; color: var(--ink-faint); }
+.tk-felt button {
+  flex: 1;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--ink-soft);
+  background: var(--cell);
+  border-radius: 999px;
+  padding: 8px 0;
+  white-space: nowrap;
+}
+.tk-felt button.on { background: var(--primary); color: var(--on-primary); }
 
 .flow-actions {
   display: flex;
