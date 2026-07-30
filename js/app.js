@@ -81,7 +81,30 @@
 
   function derived() { return PFStreak.computeDerived(state.dayLog, today()); }
 
-  function save() { PFStore.save(state); }
+  // ---------------- Practice mode ----------------
+  // A throwaway run for testing the flow. While active, `state` points at a deep
+  // clone and save() is a no-op — so nothing is written to localStorage, nothing
+  // is pushed to Supabase, and the real in-memory state can't be contaminated.
+  // Ending practice simply restores the original object.
+  var practiceBackup = null;
+
+  function startPractice() {
+    if (practiceBackup) return;
+    practiceBackup = state;
+    state = JSON.parse(JSON.stringify(state));
+    delete state.dayLog[today()]; // start from a clean slate so timers/steppers are empty
+  }
+  function endPractice() {
+    if (!practiceBackup) return false;
+    state = practiceBackup;
+    practiceBackup = null;
+    return true;
+  }
+
+  function save() {
+    if (practiceBackup) return; // practice run: never persist or sync
+    PFStore.save(state);
+  }
 
   function dayEntry(dateStr) {
     if (!state.dayLog[dateStr]) state.dayLog[dateStr] = { reps: 0, exercisesDone: {}, updatedAt: "" };
@@ -125,6 +148,14 @@
   var BACK_SVG = '<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
     'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/>' +
     '<path d="M11 6l-6 6 6 6"/></svg>';
+  // Hold-timer controls (icon-only; they flank the dial while a set is running).
+  var PAUSE_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
+    '<rect x="6.5" y="5" width="4" height="14" rx="1.4"/><rect x="13.5" y="5" width="4" height="14" rx="1.4"/></svg>';
+  var PLAY_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">' +
+    '<path d="M8 5.5v13l11-6.5z"/></svg>';
+  var RESET_SVG = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>';
   var celebrateTimer = null;
 
   function clearCelebrate() {
@@ -679,7 +710,7 @@
       hip_thrusts: "Hip Thrusts: time to add load — a dumbbell or plate across your hips.",
       side_plank: effSecs >= 40
         ? "Side Plank: 40s is the cap — progress the variation (top leg raised, or feet elevated)."
-        : "Side Plank: add 5 seconds — use the + under the timer."
+        : "Side Plank: add 5 seconds — use the + beside the timer."
     }[exId] || null;
   }
   // lastTwo = the two most recent COMPLETED records [{s, diff}, …] (newest first).
@@ -696,19 +727,37 @@
     }
     return progressionAdvice(exId, meta.effSecs || 0);
   }
-  // The last two completed sessions for an exercise (today included when complete).
-  function lastTwoSessions(exId, nSets) {
+  // Recent logged sessions for an exercise, oldest → newest.
+  // completeOnly = every set logged (what the progression rules require).
+  function sessionsFor(exId, limit, nSets, completeOnly) {
     var out = [];
     var t = today();
-    for (var i = 0; i <= 90 && out.length < 2; i++) {
-      var e = state.dayLog[PFStreak.addDays(t, -i)];
+    for (var i = 0; i <= 120 && out.length < limit; i++) {
+      var date = PFStreak.addDays(t, -i);
+      var e = state.dayLog[date];
       var rec = e && e.sets && e.sets[exId];
       if (!rec || !rec.s) continue;
-      var complete = true;
-      for (var k = 0; k < nSets; k++) if (rec.s[k] == null) complete = false;
-      if (complete) out.push(rec);
+      var vals = [], complete = true;
+      for (var k = 0; k < nSets; k++) {
+        if (rec.s[k] == null) complete = false;
+        else vals.push(rec.s[k]);
+      }
+      if (!vals.length || (completeOnly && !complete)) continue;
+      out.push({
+        date: date,
+        values: vals,
+        total: vals.reduce(function (a, b) { return a + b; }, 0),
+        max: Math.max.apply(null, vals),
+        rec: rec
+      });
     }
-    return out;
+    return out.reverse(); // oldest → newest
+  }
+
+  // The last two completed sessions for an exercise (today included when complete),
+  // newest first — the shape the progression rules expect.
+  function lastTwoSessions(exId, nSets) {
+    return sessionsFor(exId, 2, nSets, true).map(function (s) { return s.rec; }).reverse();
   }
   function progressionState(ex) {
     if (!ex.track) return null;
@@ -790,9 +839,12 @@
     return '<div class="tk-last">' + esc(txt) + "</div>";
   }
 
+  // One row inside the .tk-card: badge (number → green ✓ when logged), muted
+  // set label, right-aligned value, ghost undo.
   function doneRow(i, text) {
-    return '<div class="tk-row done"><span class="tk-slabel">Set ' + (i + 1) + '</span>' +
-      '<span class="tk-res">✓ ' + text + "</span>" +
+    return '<div class="tk-row done"><span class="tk-badge done">✓</span>' +
+      '<span class="tk-set">Set ' + (i + 1) + "</span>" +
+      '<span class="tk-value">' + text + "</span>" +
       '<button class="tk-undo" data-action="set-undo" data-i="' + i + '" aria-label="Undo set ' + (i + 1) + '">✕</button></div>';
   }
 
@@ -808,11 +860,12 @@
 
     if (tr.type === "reps") {
       repVals[ex.id] = repVals[ex.id] || [];
+      h += '<div class="tk-card">';
       for (var i = 0; i < n; i++) {
         if (viewSets[i] != null) { h += doneRow(i, viewSets[i] + " reps"); continue; }
         var locked = i > 0 && viewSets[i - 1] == null;
         var val = repVals[ex.id][i] != null ? repVals[ex.id][i] : tr.target;
-        h += '<div class="tk-row' + (locked ? " locked" : "") + '"><span class="tk-slabel">Set ' + (i + 1) + "</span>" +
+        h += '<div class="tk-row' + (locked ? " locked" : "") + '"><span class="tk-badge">' + (i + 1) + "</span>" +
           '<div class="tk-step">' +
             '<button class="tk-btn" data-action="set-dec" data-i="' + i + '"' + (locked ? " disabled" : "") + ">−</button>" +
             '<span class="tk-val">' + val + "</span>" +
@@ -820,6 +873,7 @@
             '<button class="tk-ok" data-action="set-log" data-i="' + i + '"' + (locked ? " disabled" : "") + ' aria-label="Log set ' + (i + 1) + '">✓</button>' +
           "</div></div>";
       }
+      h += "</div>";
     } else {
       // hold: big dial + controls
       var eff = holdSecsFor(ex);
@@ -830,44 +884,53 @@
         : eff;
       var frac = running ? left / runSecs : 1;
       var CIRC = 2 * Math.PI * 55;
-      h += '<div class="tk-dialwrap"><div class="tk-dial' + (running && holdRun.paused ? " paused" : "") + '">' +
+      var next = viewSets[0] == null ? 0 : (viewSets[1] == null ? 1 : -1);
+      // The two slots either side of the dial do double duty: ±5s when idle,
+      // Reset / Pause while a set runs — so nothing below the dial ever shifts.
+      var sideL, sideR;
+      if (running) {
+        sideL = '<button class="tk-side tk-side-ctrl" data-action="hold-reset" aria-label="Reset timer">' + RESET_SVG + "</button>";
+        sideR = '<button class="tk-side tk-side-ctrl" data-action="hold-pause" aria-label="' +
+          (holdRun.paused ? "Resume timer" : "Pause timer") + '">' +
+          (holdRun.paused ? PLAY_SVG : PAUSE_SVG) + "</button>";
+      } else {
+        sideL = '<button class="tk-btn tk-side" data-action="hold-dec"' +
+          (eff <= (tr.min || 5) ? " disabled" : "") + ' aria-label="5 seconds less">−</button>';
+        sideR = '<button class="tk-btn tk-side" data-action="hold-inc"' +
+          (eff >= (tr.max || 600) ? " disabled" : "") + ' aria-label="5 seconds more">+</button>';
+      }
+      var ringSvg =
         '<svg width="132" height="132" viewBox="0 0 132 132">' +
         '<circle class="ring-bg" cx="66" cy="66" r="55" fill="none" stroke-width="9"/>' +
         '<circle class="ring-fg" cx="66" cy="66" r="55" fill="none" stroke-width="9" stroke-linecap="round" ' +
           'stroke-dasharray="' + CIRC + '" stroke-dashoffset="' + (CIRC * (1 - frac)) + '"/>' +
-        "</svg>" +
-        '<div class="tk-secs"><b>' + left + "</b><i>" +
-          (running ? (holdRun.paused ? "paused" : "set " + (holdRun.set + 1)) : "seconds") + "</i></div>" +
-      "</div>";
-      // ±5s adjuster: only while idle, persisted per exercise (settings.holdSecs)
-      if (!running) {
-        h += '<div class="tk-adj">' +
-          '<button class="tk-btn" data-action="hold-dec"' + (eff <= (tr.min || 5) ? " disabled" : "") + ">−</button>" +
-          '<span class="tk-adj-l">' + eff + "s hold</span>" +
-          '<button class="tk-btn" data-action="hold-inc"' + (eff >= (tr.max || 600) ? " disabled" : "") + ">+</button>" +
-        "</div>";
-      }
-      h += '<div class="tk-ctrl">';
-      if (!running) {
-        var next = viewSets[0] == null ? 0 : (viewSets[1] == null ? 1 : -1);
-        if (next >= 0) h += '<button class="tk-start" data-action="hold-start" data-i="' + next + '">▶ Start set ' + (next + 1) + "</button>";
-      } else if (holdRun.paused) {
-        h += '<button class="tk-start" data-action="hold-pause">▶ Resume</button>' +
-             '<button class="tk-reset" data-action="hold-reset">↺ Reset</button>';
+        "</svg>";
+      var dial;
+      if (running) {
+        dial = '<div class="tk-dial' + (holdRun.paused ? " paused" : "") + '">' + ringSvg +
+          '<div class="tk-secs"><b>' + left + "</b><i>" +
+          (holdRun.paused ? "paused" : "set " + (holdRun.set + 1)) + "</i></div></div>";
+      } else if (next >= 0) {
+        // The dial IS the start control (tap the ring to begin the next set).
+        dial = '<button class="tk-dial tk-dial-go" data-action="hold-start" data-i="' + next +
+          '" aria-label="Start set ' + (next + 1) + " — " + eff + ' second hold">' + ringSvg +
+          '<div class="tk-secs"><span class="tk-play">▶</span><b>' + eff + "</b><i>start set " + (next + 1) + "</i></div></button>";
       } else {
-        h += '<button class="tk-pause" data-action="hold-pause">⏸ Pause</button>' +
-             '<button class="tk-reset" data-action="hold-reset">↺ Reset</button>';
+        dial = '<div class="tk-dial">' + ringSvg +
+          '<div class="tk-secs"><b>' + eff + "</b><i>seconds</i></div></div>";
       }
-      h += "</div></div>";
+      h += '<div class="tk-dialwrap"><div class="tk-dialrow">' + sideL + dial + sideR + "</div></div>";
+      var doneRows = "";
       for (var j = 0; j < n; j++) {
-        if (viewSets[j] != null) h += doneRow(j, "held " + viewSets[j] + "s");
+        if (viewSets[j] != null) doneRows += doneRow(j, viewSets[j] + "s");
       }
+      if (doneRows) h += '<div class="tk-card">' + doneRows + "</div>";
     }
 
     if (complete) {
       var levelUp = progressionState(ex);
       if (levelUp) h += '<div class="tk-levelup">⬆ ' + esc(levelUp) + "</div>";
-      h += '<div class="tk-done">' + esc(ex.name) + " done ✓</div>" + feltHTML(ex, rec);
+      h += '<div class="tk-donetext">✓ ' + esc(ex.name) + " done</div>" + feltHTML(ex, rec);
     }
     return h + "</div>";
   }
@@ -899,6 +962,7 @@
           "</div>" +
         "</div>" +
         '<div class="flow-bar"><div style="width:' + pct + '%"></div></div>' +
+        (practiceBackup ? '<div class="practice-bar">Practice run · nothing is saved</div>' : "") +
         '<div class="flow-body' + (ex.track ? " tracked" : "") + '">' +
           '<div class="flow-img">' + imageFor(ex) + "</div>" +
           '<h2 class="flow-name">' + esc(ex.name) + "</h2>" +
@@ -919,12 +983,9 @@
 
   // ---------------- Stats ----------------
 
-  function statTile(cls, v, k) {
-    return '<div class="stat-tile ' + cls + '"><div class="v">' + v + '</div><div class="k">' + k + "</div></div>";
-  }
-  function statGroup(label, tiles) {
-    return '<div class="stat-group-label">' + label + "</div>" +
-      '<div class="stat-grid">' + tiles + "</div>";
+  function recordItem(v, label, cls) {
+    return '<div class="rec"><b' + (cls ? ' class="' + cls + '"' : "") + ">" + v + "</b>" +
+      "<span>" + label + "</span></div>";
   }
 
   // ---------------- Consistency heatmap (BUILD-SPEC §1) ----------------
@@ -1053,19 +1114,19 @@
   function renderStats() {
     var d = derived();
 
-    // Top stats, grouped into skimmable categories.
+    // One hero number leads, three records beneath it, and the lifetime totals
+    // recede to a single line — the old 8-tile grid had no hierarchy.
     var topStats =
-      statGroup("Streak",
-        statTile("green", d.streak, "Current streak") +
-        statTile("slate", d.longestStreak, "Longest streak")) +
-      statGroup("Days &amp; sessions",
-        statTile("slate", d.totalCompleted, "Days completed") +
-        statTile("slate", d.totalSessions, "Total sessions") +
-        statTile("gold", d.goldDays, "Gold (2×) days") +
-        statTile("slate", d.bonusDaysDone, "Bonus days")) +
-      statGroup("Freezes",
-        statTile("blue", d.freezesEarned, "Freezes earned") +
-        statTile("blue", d.freezesUsed, "Freezes used"));
+      '<div class="hero-stat"><div class="hero-n">' + d.streak + "</div>" +
+        '<div class="hero-l">day streak</div></div>' +
+      '<div class="records">' +
+        recordItem(d.longestStreak, "best streak", "") +
+        recordItem(d.perfectWeeks, "perfect weeks", "") +
+        recordItem(d.goldDays, "gold days", "gold") +
+      "</div>" +
+      '<div class="lifetime">' + d.totalSessions + " session" + (d.totalSessions === 1 ? "" : "s") +
+        " across " + d.totalCompleted + " day" + (d.totalCompleted === 1 ? "" : "s") +
+        " · ❄ " + d.freezes + " banked</div>";
 
     var prs = PF_LIFTS.filter(function (l) { return !l.warmup; }).map(function (l) {
       var best = null;
@@ -1077,20 +1138,75 @@
         (best ? best.weightKg + "kg × " + best.reps : "—") + "</span></div>";
     }).join("");
 
-    var counts = PF_EXERCISES.map(function (ex) {
-      return '<div class="excount-row"><span>' + esc(ex.name) + '</span><span class="v">' +
-        (d.exCounts[ex.id] || 0) + "</span></div>";
-    }).join("");
-
     return (
       '<div class="subnav"><button class="back" data-action="goto" data-view="dashboard" aria-label="Back">' + BACK_SVG + '</button><h2>Lifetime stats</h2></div>' +
       '<div class="card">' + topStats + "</div>" +
       renderHeatmapCard(d) +
       renderBadgesCard(d) +
+      renderExercisesCard(d) +
       renderTimingCard() +
-      '<div class="card"><div class="card-title">Exercise completions</div>' + counts + "</div>" +
       '<div class="card"><div class="card-title">Strength PRs</div>' + prs + "</div>"
     );
+  }
+
+  // Tiny bar sparkline: one series, one hue, bars anchored to a zero baseline and
+  // scaled to this row's own max (exercises aren't comparable to each other).
+  // The most recent bar is full strength, earlier ones recede.
+  function sparklineHTML(values, label) {
+    var n = values.length, W = 58, H = 22, GAP = 2;
+    var bw = (W - (n - 1) * GAP) / n;
+    var max = Math.max.apply(null, values) || 1;
+    var bars = values.map(function (v, i) {
+      var h = Math.max(2, Math.round((v / max) * H));
+      var x = +(i * (bw + GAP)).toFixed(2);
+      return '<rect x="' + x + '" y="' + (H - h) + '" width="' + bw.toFixed(2) + '" height="' + h +
+        '" rx="1.5" class="' + (i === n - 1 ? "spark-now" : "spark-bar") + '"/>';
+    }).join("");
+    return '<svg class="spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + " " + H +
+      '" role="img" aria-label="' + esc(label) + '">' + bars + "</svg>";
+  }
+
+  // One card for every exercise: tracked ones show what you're working at, a trend
+  // of recent sessions and a ↑ when they're ready to progress; untracked ones keep
+  // their lifetime completion count.
+  function renderExercisesCard(d) {
+    var anyTracked = false;
+    var rows = PF_EXERCISES.map(function (ex) {
+      var tr = ex.track;
+      var right, sub = "";
+
+      if (tr) {
+        var isHold = tr.type === "hold";
+        var sessions = sessionsFor(ex.id, 6, tr.sets, false);
+        if (sessions.length) anyTracked = true;
+        sub = tr.sets + " × " + (isHold ? holdSecsFor(ex) + "s" : tr.target);
+
+        if (sessions.length >= 2) {
+          var series = sessions.map(function (s) { return isHold ? s.max : s.total; });
+          var last = sessions[sessions.length - 1];
+          var lastText = isHold ? last.max + "s" : last.values.join(", ");
+          right =
+            sparklineHTML(series, "Last " + series.length + " sessions: " + series.join(", ")) +
+            '<span class="ex-val">' + esc(lastText) + "</span>";
+        } else if (sessions.length === 1) {
+          var only = sessions[0];
+          right = '<span class="ex-val">' + esc(isHold ? only.max + "s" : only.values.join(", ")) + "</span>";
+        } else {
+          right = '<span class="ex-none">not logged yet</span>';
+        }
+        if (progressionState(ex)) right += ' <span class="up-chip" title="Ready to progress">↑</span>';
+      } else {
+        right = '<span class="ex-count">' + (d.exCounts[ex.id] || 0) + "</span>";
+      }
+
+      return '<div class="ex-row"><span class="ex-main"><span class="ex-name">' + esc(ex.name) + "</span>" +
+        (sub ? '<span class="ex-sub">' + esc(sub) + "</span>" : "") +
+        '</span><span class="ex-right">' + right + "</span></div>";
+    }).join("");
+
+    return '<div class="card"><div class="card-title">Exercises</div>' +
+      (anyTracked ? "" : '<div class="timing-empty">Log your sets in the daily flow and your progress shows up here.</div>') +
+      rows + "</div>";
   }
 
   function renderTimingCard() {
@@ -1155,6 +1271,13 @@
             '<button class="' + (s.theme !== "dark" ? "on" : "") + '" data-action="set-theme" data-theme-val="light">Light</button>' +
             '<button class="' + (s.theme === "dark" ? "on" : "") + '" data-action="set-theme" data-theme-val="dark">Dark</button>' +
           "</div></div>" +
+      "</div>" +
+
+      '<div class="card"><div class="card-title">Practice</div>' +
+        '<div class="set-row col"><span class="set-label">Practice run' +
+          '<span class="set-sub">Step through the whole flow — timers, sets and all. Nothing is logged, and your streak, stats and sync are untouched.</span></span>' +
+          '<button class="btn-secondary btn-block" data-action="practice-flow">Start practice run</button>' +
+        "</div>" +
       "</div>" +
 
       '<div class="card"><div class="card-title">Exercise images</div>' +
@@ -1406,12 +1529,19 @@
     } else {
       timingCommit();
       save();
+      var finalReps = e.reps;              // capture before practice restores state
+      var wasPractice = endPractice();
       weekOffset = 0; // snap the strip back to the current week to show today's completion
       view = "dashboard";
       render();
-      toast(e.reps >= 2 ? "Gold day — full flow ×2 ✓✓" : "Day complete ✓ Streak +1");
-      maybeCelebrate(flowStartReps, e.reps); // compare vs reps when the flow opened
-      checkBadgeReveals();
+      if (wasPractice) {
+        toast("Practice run finished — nothing was saved");
+        maybeCelebrate(0, finalReps);      // the celebration is part of what you're testing
+      } else {
+        toast(finalReps >= 2 ? "Gold day — full flow ×2 ✓✓" : "Day complete ✓ Streak +1");
+        maybeCelebrate(flowStartReps, finalReps); // compare vs reps when the flow opened
+        checkBadgeReveals();
+      }
     }
   }
 
@@ -1501,7 +1631,22 @@
       view = "flow";
       render();
     }
-    else if (a === "exit-flow") { flowTiming = null; stopHold(); view = "dashboard"; render(); }
+    else if (a === "practice-flow") {
+      startPractice();
+      flowIndex = 0;
+      flowStartReps = 0;
+      repVals = {};
+      stopHold();
+      flowTiming = null; // practice never contributes to timing stats
+      view = "flow";
+      render();
+    }
+    else if (a === "exit-flow") {
+      flowTiming = null; stopHold();
+      var quitPractice = endPractice();
+      view = "dashboard"; render();
+      if (quitPractice) toast("Practice run over — nothing was saved");
+    }
     else if (a === "flow-advance") flowAdvance();
     else if (a === "flow-back") flowBack();
     else if (a === "noop") { /* tracker container: swallow the tap-to-advance */ }
@@ -1641,8 +1786,10 @@
       ev.preventDefault();
       flowTiming = null;
       stopHold();
+      var escPractice = endPractice();
       view = "dashboard";
       render();
+      if (escPractice) toast("Practice run over — nothing was saved");
     }
   });
 

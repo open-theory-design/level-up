@@ -651,6 +651,19 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   margin-top: 14px;
 }
 
+/* Practice-run banner — makes it unmistakable that nothing is being logged. */
+.practice-bar {
+  background: var(--gold-tint);
+  color: var(--on-gold);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+  border-radius: 8px;
+  padding: 5px 8px;
+  margin-bottom: 10px;
+}
+
 /* ---------- Set tracker (tracked flow screens) ---------- */
 
 /* Tracked screens compress the media + tips so image, tips, tracker and Next
@@ -673,20 +686,43 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 .tk { margin-top: 10px; }
 .tk-last { font-size: 12px; color: var(--ink-faint); margin-bottom: 7px; }
 
+/* One card, hairline-divided rows — the check carries the state, not a row fill
+   (pattern: Bevel/Tonal completed-set tables). */
+.tk-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg);
+}
 .tk-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  margin-bottom: 7px;
+  gap: 10px;
+  padding: 8px 12px;
   min-height: 50px;
 }
+.tk-row + .tk-row { border-top: 1px solid var(--line); }
 .tk-row.locked { opacity: 0.45; }
-.tk-row.done { background: var(--success-tint); border-color: var(--success-border); }
-.tk-slabel { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); width: 38px; flex: none; }
-.tk-res { flex: 1; font-size: 14px; font-weight: 700; color: var(--green); }
+.tk-badge {
+  flex: none;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--cell);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.tk-badge.done { background: var(--success-tint); color: var(--green); }
+.tk-set { font-size: 12.5px; font-weight: 600; color: var(--ink-faint); }
+.tk-value {
+  flex: 1;
+  text-align: right;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding-right: 2px;
+}
 .tk-undo {
   flex: none;
   width: 26px; height: 26px;
@@ -717,7 +753,14 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 
 /* hold dial */
 .tk-dialwrap { display: flex; flex-direction: column; align-items: center; margin: 2px 0 8px; }
-.tk-dial { position: relative; width: 132px; height: 132px; }
+.tk-dial { position: relative; width: 132px; height: 132px; flex: none; }
+
+/* Idle dial doubles as the start control — no separate button. */
+.tk-dial-go { padding: 0; background: none; border: none; cursor: pointer; }
+.tk-dial-go:active { transform: scale(0.97); }
+.tk-dial-go .tk-secs b { font-size: 26px; }
+.tk-dial-go .tk-secs i { color: var(--primary); font-weight: 700; font-size: 11.5px; }
+.tk-play { font-size: 19px; line-height: 1; color: var(--primary); margin-bottom: 1px; }
 .tk-dial svg { transform: rotate(-90deg); display: block; }
 .tk-dial .ring-bg { stroke: var(--cell); }
 .tk-dial .ring-fg { stroke: var(--teal); transition: stroke-dashoffset 0.2s linear; }
@@ -728,33 +771,95 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 }
 .tk-secs b { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
 .tk-secs i { font-style: normal; font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
-.tk-ctrl { display: flex; gap: 8px; margin-top: 10px; width: 100%; }
-.tk-ctrl button {
-  flex: 1;
-  font-size: 14px; font-weight: 700;
-  border-radius: 10px;
-  padding: 11px 0;
-}
-/* Outline, not filled — the solid "Next" at the bottom stays the only primary CTA. */
-.tk-start {
-  background: transparent;
-  color: var(--primary);
-  box-shadow: inset 0 0 0 2px var(--primary);
-}
-.tk-start:active { background: var(--success-tint); }
-.tk-pause { background: var(--gold); color: var(--on-gold); }
-.tk-reset { background: var(--cell); color: var(--ink-soft); }
-
-/* ±5s hold-length adjuster (idle dial only) */
-.tk-adj {
+/* The slots either side of the dial: ±5s when idle, Reset / Pause while running.
+   Same size and position in both states, so nothing below the dial shifts. */
+.tk-dialrow {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 20px;
 }
-.tk-adj .tk-btn { width: 36px; height: 30px; font-size: 16px; }
-.tk-adj-l { font-size: 12.5px; font-weight: 700; color: var(--ink-soft); min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.tk-side { width: 40px; height: 40px; border-radius: 50%; font-size: 18px; flex: none; }
+/* Running controls: neutral outline, icon-only — quiet next to the teal ring. */
+.tk-side-ctrl {
+  background: transparent;
+  border: 1.5px solid var(--line);
+  color: var(--ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tk-side-ctrl:active { background: var(--cell); }
+
+/* ---------- Stats: hero + records (top of the page) ---------- */
+
+.hero-stat { text-align: center; padding-top: 2px; }
+.hero-n {
+  font-size: 54px;
+  font-weight: 800;
+  color: var(--teal);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.hero-l { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+
+.records {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  margin-top: 14px;
+  padding-top: 12px;
+}
+.rec { flex: 1; text-align: center; }
+.rec b {
+  display: block;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.rec b.gold { color: var(--gold-ink); }
+.rec span { display: block; font-size: 10.5px; color: var(--ink-faint); margin-top: 2px; }
+
+.lifetime { font-size: 11.5px; color: var(--ink-faint); text-align: center; margin-top: 11px; }
+
+/* ---------- Stats: exercises card (tracked rows + counts) ---------- */
+
+.ex-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.ex-row:first-of-type { border-top: none; }
+.ex-main { flex: 1; min-width: 0; }
+.ex-name { display: block; font-size: 14px; }
+.ex-sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  margin-top: 1px;
+  font-variant-numeric: tabular-nums;
+}
+.ex-right { flex: none; display: flex; align-items: center; gap: 8px; }
+/* Values wear text tokens — the bars carry the trend, the number carries the fact. */
+.ex-val {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: right;
+}
+.ex-count { font-size: 14px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.ex-none { font-size: 12px; color: var(--ink-faint); }
+
+.spark { display: block; overflow: visible; }
+.spark-bar { fill: var(--teal); opacity: 0.4; }
+.spark-now { fill: var(--teal); }
 
 /* progression callout ("level up this exercise") */
 .tk-levelup {
@@ -775,16 +880,13 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   font-size: 13px;
 }
 
-/* completion + felt (cleaned-up bottom) */
-.tk-done {
-  background: var(--success-tint);
-  border: 1px solid var(--success-border);
-  color: var(--green);
-  font-size: 13px; font-weight: 700;
+/* completion: one quiet text line — the row checks already tell the story */
+.tk-donetext {
   text-align: center;
-  border-radius: 10px;
-  padding: 8px;
-  margin-top: 3px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--green);
+  margin-top: 9px;
 }
 .tk-felt { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
 .tk-felt-l { flex: none; font-size: 11.5px; color: var(--ink-faint); }
@@ -925,16 +1027,6 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 .excount-row .v { font-weight: 700; color: var(--ink-soft); }
 
 /* ---------- Timing card ---------- */
-
-.stat-group-label {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-faint);
-  margin: 18px 0 10px;
-}
-.stat-group-label:first-child { margin-top: 2px; }
 
 /* ---------- Consistency heatmap ---------- */
 

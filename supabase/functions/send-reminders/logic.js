@@ -87,7 +87,7 @@ export function progressionAdvice(exId, effSecs) {
     hip_thrusts: "Hip Thrusts: time to add load — a dumbbell or plate across your hips.",
     side_plank: effSecs >= 40
       ? "Side Plank: 40s is the cap — progress the variation (top leg raised, or feet elevated)."
-      : "Side Plank: add 5 seconds — use the + under the timer."
+      : "Side Plank: add 5 seconds — use the + beside the timer."
   }[exId] || null;
 }
 
