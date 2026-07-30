@@ -72,9 +72,9 @@ export function weekDates(logicalDate, dow) {
 // side_plank: capped at 40s; below → add time, at cap → progress the variation.
 // TRACK_META mirrors the `track` fields in js/exercises.js (flow order).
 export var TRACK_META = [
-  { id: "deadbugs",    group: "A", sets: 2, target: 10 },
-  { id: "side_plank",  group: "S", sets: 2, secs: 30 },
-  { id: "bird_dogs",   group: "A", sets: 2, target: 10 },
+  { id: "deadbugs",    group: "A", sets: 2, target: 20 },
+  { id: "side_plank",  group: "S", sets: 4, secs: 30 },
+  { id: "bird_dogs",   group: "A", sets: 2, target: 20 },
   { id: "clamshells",  group: "B", sets: 2, target: 15 },
   { id: "hip_thrusts", group: "B", sets: 2, target: 12 }
 ];

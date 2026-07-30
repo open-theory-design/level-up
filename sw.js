@@ -1,7 +1,7 @@
 // Level Up service worker — offline shell (PRD §2.2).
 // Static assets are cached; Supabase API calls always go to the network.
 
-var CACHE = "levelup-v13"; // bumped for progression nudges + hold adjuster + top-align
+var CACHE = "levelup-v14"; // bumped for per-side timer structures (6× quad roll, 4× side plank)
 var ASSETS = [
   "./",
   "./index.html",

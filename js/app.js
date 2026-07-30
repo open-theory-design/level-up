@@ -831,7 +831,11 @@
     var tr = ex.track;
     var unit = tr.type === "hold" ? "s" : "";
     var vals = last.s.filter(function (v) { return v != null; });
-    var txt = "last: " + vals.map(function (v) { return v + unit; }).join(", ");
+    // Holds compare as TOTAL time under tension — it survives structure changes
+    // (2×60s and 6×30s are both honest as totals). Reps stay a per-set list.
+    var txt = tr.type === "hold"
+      ? "last: " + vals.reduce(function (a, b) { return a + b; }, 0) + "s total"
+      : "last: " + vals.join(", ");
     var bump = tr.type === "hold" ? 5 : 2;
     var base = Math.max.apply(null, vals); // build the suggestion on what was actually done
     if (last.diff === "easy") txt += " · felt easy → try " + (base + bump) + unit + "?";
@@ -839,13 +843,18 @@
     return '<div class="tk-last">' + esc(txt) + "</div>";
   }
 
+  // Per-side structures name their slots ("Left 2"); plain ones fall back to "Set N".
+  function setLabel(ex, i) {
+    return (ex.track.labels && ex.track.labels[i]) || "Set " + (i + 1);
+  }
+
   // One row inside the .tk-card: badge (number → green ✓ when logged), muted
   // set label, right-aligned value, ghost undo.
-  function doneRow(i, text) {
+  function doneRow(ex, i, text) {
     return '<div class="tk-row done"><span class="tk-badge done">✓</span>' +
-      '<span class="tk-set">Set ' + (i + 1) + "</span>" +
+      '<span class="tk-set">' + esc(setLabel(ex, i)) + "</span>" +
       '<span class="tk-value">' + text + "</span>" +
-      '<button class="tk-undo" data-action="set-undo" data-i="' + i + '" aria-label="Undo set ' + (i + 1) + '">✕</button></div>';
+      '<button class="tk-undo" data-action="set-undo" data-i="' + i + '" aria-label="Undo ' + esc(setLabel(ex, i)) + '">✕</button></div>';
   }
 
   function renderTracker(ex) {
@@ -862,7 +871,7 @@
       repVals[ex.id] = repVals[ex.id] || [];
       h += '<div class="tk-card">';
       for (var i = 0; i < n; i++) {
-        if (viewSets[i] != null) { h += doneRow(i, viewSets[i] + " reps"); continue; }
+        if (viewSets[i] != null) { h += doneRow(ex, i, viewSets[i] + " reps"); continue; }
         var locked = i > 0 && viewSets[i - 1] == null;
         var val = repVals[ex.id][i] != null ? repVals[ex.id][i] : tr.target;
         h += '<div class="tk-row' + (locked ? " locked" : "") + '"><span class="tk-badge">' + (i + 1) + "</span>" +
@@ -884,7 +893,8 @@
         : eff;
       var frac = running ? left / runSecs : 1;
       var CIRC = 2 * Math.PI * 55;
-      var next = viewSets[0] == null ? 0 : (viewSets[1] == null ? 1 : -1);
+      var next = -1; // first unlogged slot, whatever the set count
+      for (var s2 = 0; s2 < n; s2++) { if (viewSets[s2] == null) { next = s2; break; } }
       // The two slots either side of the dial do double duty: ±5s when idle,
       // Reset / Pause while a set runs — so nothing below the dial ever shifts.
       var sideL, sideR;
@@ -909,12 +919,12 @@
       if (running) {
         dial = '<div class="tk-dial' + (holdRun.paused ? " paused" : "") + '">' + ringSvg +
           '<div class="tk-secs"><b>' + left + "</b><i>" +
-          (holdRun.paused ? "paused" : "set " + (holdRun.set + 1)) + "</i></div></div>";
+          (holdRun.paused ? "paused" : esc(setLabel(ex, holdRun.set).toLowerCase())) + "</i></div></div>";
       } else if (next >= 0) {
         // The dial IS the start control (tap the ring to begin the next set).
         dial = '<button class="tk-dial tk-dial-go" data-action="hold-start" data-i="' + next +
-          '" aria-label="Start set ' + (next + 1) + " — " + eff + ' second hold">' + ringSvg +
-          '<div class="tk-secs"><span class="tk-play">▶</span><b>' + eff + "</b><i>start set " + (next + 1) + "</i></div></button>";
+          '" aria-label="Start ' + esc(setLabel(ex, next)) + " — " + eff + ' second hold">' + ringSvg +
+          '<div class="tk-secs"><span class="tk-play">▶</span><b>' + eff + "</b><i>start " + esc(setLabel(ex, next).toLowerCase()) + "</i></div></button>";
       } else {
         dial = '<div class="tk-dial">' + ringSvg +
           '<div class="tk-secs"><b>' + eff + "</b><i>seconds</i></div></div>";
@@ -922,9 +932,9 @@
       h += '<div class="tk-dialwrap"><div class="tk-dialrow">' + sideL + dial + sideR + "</div></div>";
       var doneRows = "";
       for (var j = 0; j < n; j++) {
-        if (viewSets[j] != null) doneRows += doneRow(j, viewSets[j] + "s");
+        if (viewSets[j] != null) doneRows += doneRow(ex, j, viewSets[j] + "s");
       }
-      if (doneRows) h += '<div class="tk-card">' + doneRows + "</div>";
+      if (doneRows) h += '<div class="tk-card' + (n > 2 ? " dense" : "") + '">' + doneRows + "</div>";
     }
 
     if (complete) {
@@ -1182,15 +1192,16 @@
         sub = tr.sets + " × " + (isHold ? holdSecsFor(ex) + "s" : tr.target);
 
         if (sessions.length >= 2) {
-          var series = sessions.map(function (s) { return isHold ? s.max : s.total; });
+          // Totals for both types — the structure-invariant comparison metric.
+          var series = sessions.map(function (s) { return s.total; });
           var last = sessions[sessions.length - 1];
-          var lastText = isHold ? last.max + "s" : last.values.join(", ");
+          var lastText = isHold ? last.total + "s" : last.values.join(", ");
           right =
-            sparklineHTML(series, "Last " + series.length + " sessions: " + series.join(", ")) +
+            sparklineHTML(series, "Last " + series.length + " sessions" + (isHold ? " (total seconds)" : "") + ": " + series.join(", ")) +
             '<span class="ex-val">' + esc(lastText) + "</span>";
         } else if (sessions.length === 1) {
           var only = sessions[0];
-          right = '<span class="ex-val">' + esc(isHold ? only.max + "s" : only.values.join(", ")) + "</span>";
+          right = '<span class="ex-val">' + esc(isHold ? only.total + "s" : only.values.join(", ")) + "</span>";
         } else {
           right = '<span class="ex-none">not logged yet</span>';
         }

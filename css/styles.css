@@ -703,6 +703,8 @@ h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.01em; }
 }
 .tk-row + .tk-row { border-top: 1px solid var(--line); }
 .tk-row.locked { opacity: 0.45; }
+/* 4–6-set structures (per-side timers): tighter rows so the list stays compact */
+.tk-card.dense .tk-row { min-height: 40px; padding: 5px 12px; }
 .tk-badge {
   flex: none;
   width: 24px; height: 24px;
