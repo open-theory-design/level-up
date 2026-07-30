@@ -6,7 +6,7 @@
   "use strict";
 
   var REQUIRED = { 1: true, 3: true, 4: true }; // Mon, Wed, Thu (Date.getDay)
-  var FREEZE_CAP = 2;
+  var FREEZE_CAP = 1;
   var EARN_EVERY = 3; // +1 freeze per 3 required days completed in a row
 
   function pad(n) { return (n < 10 ? "0" : "") + n; }
