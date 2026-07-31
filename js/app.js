@@ -333,7 +333,13 @@
           "</div>" +
           '<div class="freeze-bank">' +
             '<div class="flakes">' + flakes + "</div>" +
-            '<div class="freeze-progress">' + d.earnCounter + "/" + PFStreak.EARN_EVERY + " toward next freeze</div>" +
+            // At the cap there's nothing left to earn — say so instead of
+            // showing a progress counter that can never move.
+            '<div class="freeze-progress' + (d.freezes >= PFStreak.FREEZE_CAP ? " full" : "") + '">' +
+              (d.freezes >= PFStreak.FREEZE_CAP
+                ? "Freeze ready · you're covered"
+                : d.earnCounter + "/" + PFStreak.EARN_EVERY + " toward your freeze") +
+            "</div>" +
           "</div>" +
         "</div>" +
         renderWeek(d) +
