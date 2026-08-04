@@ -23,29 +23,32 @@
 
   // dimension -> { key for derived value, color class, icon, tiers[], names[] }
   var DIMENSIONS = [
+    // Low rungs first: the early tiers exist so day one is rewarded — without
+    // them the first badge was 25 sessions away.
     {
       dim: "sessions", value: "totalSessions", color: "slate", icon: "medal",
-      tiers: [25, 100, 250, 500, 1000],
-      names: ["Getting going", "Century", "250 club", "500 club", "Iron habit"],
-      unit: "sessions"
+      tiers: [1, 5, 10, 25, 100, 250, 500, 1000],
+      names: ["First session", "Five down", "Double digits", "Getting going",
+              "Century", "250 club", "500 club", "Iron habit"],
+      unit: "sessions", unitOne: "session"
     },
     {
       dim: "streak", value: "longestStreak", color: "teal", icon: "flame",
-      tiers: [7, 14, 30, 60, 100],
-      names: ["First week", "Fortnight", "Month strong", "Two months", "Centurion"],
+      tiers: [3, 7, 14, 30, 60, 100],
+      names: ["Three in a row", "First week", "Fortnight", "Month strong", "Two months", "Centurion"],
       unit: "day streak"
     },
     {
       dim: "gold", value: "goldDays", color: "gold", icon: "bolt",
-      tiers: [5, 10, 25, 50],
-      names: ["Overachiever", "Double gold", "Gold 25", "Gold 50"],
-      unit: "2× days"
+      tiers: [1, 5, 10, 25, 50],
+      names: ["Double day", "Overachiever", "Double gold", "Gold 25", "Gold 50"],
+      unit: "2× days", unitOne: "2× day"
     },
     {
       dim: "perfect_week", value: "perfectWeeks", color: "slate", icon: "calendar",
       tiers: [1, 4, 12, 26],
       names: ["Perfect week", "Perfect month", "Perfect quarter", "Half-year perfect"],
-      unit: "perfect weeks"
+      unit: "perfect weeks", unitOne: "perfect week"
     }
   ];
 
@@ -54,6 +57,11 @@
   // Returns { earnedIds: Set-like {}, badges: [ {id,name,color,icon,threshold,unit,status,current} ] }
   // status: "earned" | "in-progress" | "locked". Per dimension: all earned tiers
   // as earned badges + the single next tier as in-progress (further tiers hidden).
+  // "1 session", not "1 sessions".
+  function unitFor(dm, th) {
+    return th === 1 && dm.unitOne ? dm.unitOne : dm.unit;
+  }
+
   function compute(derived) {
     var earnedIds = {};
     var badges = [];
@@ -67,13 +75,13 @@
           earnedIds[id] = true;
           badges.push({
             id: id, dim: dm.dim, name: dm.names[i], color: dm.color, icon: dm.icon,
-            threshold: th, unit: dm.unit, status: "earned"
+            threshold: th, unit: unitFor(dm, th), status: "earned"
           });
         } else if (!shownNext) {
           shownNext = true; // only the next unearned tier shows as in-progress
           badges.push({
             id: id, dim: dm.dim, name: dm.names[i], color: dm.color, icon: dm.icon,
-            threshold: th, unit: dm.unit, status: "in-progress", current: val
+            threshold: th, unit: unitFor(dm, th), status: "in-progress", current: val
           });
         }
       });

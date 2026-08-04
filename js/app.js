@@ -260,27 +260,46 @@
   }
 
   function showNextReveal() {
-    if (document.querySelector(".reveal-overlay")) return; // one at a time
+    if (document.querySelector(".reveal-overlay")) return;   // one at a time
+    // The day-completion celebration owns the screen first — never compete with
+    // it; poll until it has cleared, then take our own moment.
+    if (document.querySelector(".celebrate-overlay")) {
+      setTimeout(showNextReveal, 250);
+      return;
+    }
     var b = revealQueue.shift();
-    if (!b) return;
+    if (b) showBadgeModal(b);
+  }
+
+  // The spotlight modal: rotating rays + glow behind the badge icon, and it
+  // stays until dismissed (Continue, backdrop, or "See all badges").
+  // preview = true when triggered from Settings — doesn't advance the queue.
+  function showBadgeModal(b, preview) {
     var o = document.createElement("div");
     o.className = "reveal-overlay";
     o.innerHTML =
       '<div class="reveal-card' + (reduceMotion ? " static" : "") + " badge-" + (b.color || "slate") + '">' +
-        '<div class="reveal-ic">' + PFBadges.icon(b.icon) + "</div>" +
-        '<div class="reveal-kicker">Milestone unlocked</div>' +
+        '<div class="reveal-spot">' +
+          '<span class="reveal-rays"></span>' +
+          '<span class="reveal-glow"></span>' +
+          '<span class="reveal-ic">' + PFBadges.icon(b.icon) + "</span>" +
+        "</div>" +
+        '<div class="reveal-kicker">' + (preview ? "Preview" : "Badge earned") + "</div>" +
         '<div class="reveal-name">' + esc(b.name) + "</div>" +
         '<div class="reveal-sub">' + esc(b.threshold ? b.threshold + " " + b.unit : (b.desc || "")) + "</div>" +
+        '<button class="reveal-go">Continue</button>' +
+        '<button class="reveal-all">See all badges</button>' +
       "</div>";
-    var tmr;
+
     function dismiss() {
       o.remove();
-      clearTimeout(tmr);
-      setTimeout(showNextReveal, 260); // queue the next, if any
+      if (!preview) setTimeout(showNextReveal, 260); // next in the queue, if any
     }
-    o.addEventListener("click", dismiss);
+    o.addEventListener("click", function (ev) {
+      if (ev.target.closest(".reveal-all")) { dismiss(); view = "stats"; render(); return; }
+      if (ev.target.closest(".reveal-go") || ev.target === o) dismiss();
+    });
     document.body.appendChild(o);
-    tmr = setTimeout(dismiss, 2200);
   }
 
   // ---------------- Dashboard ----------------
@@ -1295,6 +1314,10 @@
           '<span class="set-sub">Step through the whole flow — timers, sets and all. Nothing is logged, and your streak, stats and sync are untouched.</span></span>' +
           '<button class="btn-secondary btn-block" data-action="practice-flow">Start practice run</button>' +
         "</div>" +
+        '<div class="set-row col"><span class="set-label">Badge celebration' +
+          '<span class="set-sub">See what a milestone unlock looks like. Shows your latest badge — nothing is earned or reset.</span></span>' +
+          '<button class="btn-secondary btn-block" data-action="preview-badge">Preview badge celebration</button>' +
+        "</div>" +
       "</div>" +
 
       '<div class="card"><div class="card-title">Exercise images</div>' +
@@ -1647,6 +1670,15 @@
       timingStart();
       view = "flow";
       render();
+    }
+    else if (a === "preview-badge") {
+      // Preview only — shows the most advanced badge already earned, or a
+      // sample when none are. Never writes, never touches badgesSeen.
+      var res = PFBadges.compute(derived());
+      var earned = res.badges.filter(function (x) { return x.status === "earned"; });
+      showBadgeModal(earned.length ? earned[earned.length - 1] : {
+        name: "First week", icon: "flame", color: "teal", threshold: 7, unit: "day streak"
+      }, true);
     }
     else if (a === "practice-flow") {
       startPractice();
