@@ -102,9 +102,9 @@ No build step, no framework — Vercel serves the folder as static files.
 Offline: the service worker caches the app shell, so it opens without a
 network connection; sync resumes when you're back online.
 
-> Reminders fire **while the app is open / recently foregrounded** only.
-> Closed-app scheduled push is not possible for a serverless PWA and is
-> explicitly out of scope for v1 (PRD §2.2).
+> Notifications are delivered by Web Push and work with the app closed — see §5.
+> When the app happens to be open, the service worker hands the payload to the
+> page as an in-app toast instead, so one reminder is always one signal.
 
 ## 4. Syncing a second device
 
@@ -118,11 +118,30 @@ last-write-wins per day/entry.
 ## 5. Push notifications (closed-app, Android & desktop Chrome)
 
 Real push while the app is closed: Web Push (VAPID) sent by a **Supabase Edge
-Function**, scheduled by **pg_cron** every 5 minutes. Pushes fire at your
-configured reminder times, plus two evening (18:00 local) "at-risk" nudges: a
-**streak-saver** on required days (Mon/Wed/Thu) when the flow isn't logged yet,
-and a **weekly last-chance** on Sunday when you've done fewer than 3 sessions that
-week. All times are evaluated in each device's own timezone.
+Function**, scheduled by **pg_cron** every 5 minutes. All times are evaluated in
+each device's own timezone. Three pushes, and nothing else — design and copy in
+[`BUILD-SPEC-notifications.md`](BUILD-SPEC-notifications.md):
+
+| Push | When | Only if |
+|---|---|---|
+| **Key-day nudge** | Mon/Wed/Thu at `notify.keyDayTime` | the flow isn't logged yet |
+| **Streak warning** | Mon/Wed/Thu at `notify.warningTime` | not logged **and** the streak is ≥ 1 |
+| **Sunday recap** | Sunday at `notify.warningTime` | the recap is switched on |
+
+Tue/Fri/Sat are silent, and the warning is skipped when there is no streak to
+lose. That's ~4 pushes a week on a good week. Times and toggles live in Settings
+and sync via `profile.settings.notify`.
+
+The function evaluates the **full** streak engine server-side (a mirror of
+`js/streak.js` inside `logic.js`) because it needs the freeze count: a banked
+freeze means a missed key day does *not* break the streak, and the copy has to
+tell the truth about that. A cached snapshot can't work — the engine spends the
+freeze while the app is closed. `scripts/test-notifications.mjs` asserts the two
+engines stay in agreement:
+
+```bash
+node scripts/test-notifications.mjs
+```
 
 ### 5.1 Database (SQL Editor → run once)
 

@@ -1,7 +1,7 @@
 // Level Up service worker — offline shell (PRD §2.2).
 // Static assets are cached; Supabase API calls always go to the network.
 
-var CACHE = "levelup-v14"; // bumped for per-side timer structures (6× quad roll, 4× side plank)
+var CACHE = "levelup-v15"; // bumped for the notification rebuild (BUILD-SPEC-notifications.md)
 var ASSETS = [
   "./",
   "./index.html",
@@ -43,23 +43,42 @@ self.addEventListener("push", function (e) {
   var data = { title: "Level Up", body: "Time for your daily flow.", url: "./" };
   try { data = Object.assign(data, e.data.json()); } catch (err) { /* keep defaults */ }
   e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "icon.svg",
-      badge: "icon.svg",
-      data: { url: data.url }
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
+      var visible = list.filter(function (c) { return c.visibilityState === "visible"; });
+      // App already on screen: hand the payload to the page, which shows an
+      // in-app toast. One reminder is always one signal — never a notification
+      // stacked on top of the UI it's telling you to open. Browsers only allow
+      // a silent push handler when a visible client exists, which is this case.
+      if (visible.length) {
+        visible.forEach(function (c) {
+          c.postMessage({ type: "push", title: data.title, body: data.body, url: data.url });
+        });
+        return;
+      }
+      return self.registration.showNotification(data.title, {
+        body: data.body,
+        icon: "icon.svg",
+        badge: "icon.svg",
+        data: { url: data.url }
+      });
     })
   );
 });
 
 self.addEventListener("notificationclick", function (e) {
   e.notification.close();
+  var url = (e.notification.data && e.notification.data.url) || "./";
   e.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {
-        if ("focus" in list[i]) return list[i].focus();
+        if ("focus" in list[i]) {
+          // Focusing an existing window doesn't change its URL, so the deep
+          // link has to travel as a message instead of a hash.
+          list[i].postMessage({ type: "open", url: url });
+          return list[i].focus();
+        }
       }
-      return clients.openWindow(e.notification.data && e.notification.data.url || "./");
+      return clients.openWindow(url);
     })
   );
 });

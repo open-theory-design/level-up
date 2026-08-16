@@ -1,12 +1,19 @@
 // Pure scheduling logic for the send-reminders Edge Function.
 // No imports, no I/O — shared by the Deno function (index.ts) and the local
-// Node test harness. Mirrors the app's rules:
+// Node test harness. See BUILD-SPEC-notifications.md for the full design.
+//
+// The notification set (all times evaluated in the device's own timezone):
+//   1. key-day nudge   — Mon/Wed/Thu at notify.keyDayTime, if the flow isn't done
+//   2. streak warning  — Mon/Wed/Thu at notify.warningTime, if not done AND streak >= 1
+//   3. Sunday recap    — Sunday at notify.warningTime
+// Nothing else. Tue/Fri/Sat are silent.
+//
+// Mirrors the app's rules:
 //   - logical day runs 4:00am -> 3:59am local (js/streak.js logicalDateStr)
 //   - required days are Mon/Wed/Thu (js/streak.js REQUIRED)
 //   - cron fires every 5 minutes; times are floored to their 5-min slot
 
-// Evening check on key days (streak risk) and Sunday (weekly-goal "last chance").
-export var EVENING_CHECK = "18:00"; // local ~6pm
+// ---------------- Timezone / date helpers ----------------
 
 // Format a UTC timestamp into parts in an IANA timezone.
 function tzParts(ms, tz) {
@@ -55,14 +62,136 @@ export function addDaysStr(dateStr, n) {
   return d.toISOString().slice(0, 10);
 }
 
-// The 7 YYYY-MM-DD dates of the Monday-based week containing `logicalDate`.
-// `dow` is the "Mon".."Sun" weekday of that logical date.
-var DOW_INDEX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
-export function weekDates(logicalDate, dow) {
-  var monday = addDaysStr(logicalDate, -DOW_INDEX[dow]);
-  var out = [];
-  for (var i = 0; i < 7; i++) out.push(addDaysStr(monday, i));
-  return out;
+var DOW_NAME = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+var SHORT_TO_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+// 0 Sun .. 6 Sat for a YYYY-MM-DD string. Anchored at noon UTC so it can never
+// drift with the server's own timezone (js/streak.js uses local noon; both land
+// on the same calendar day).
+function dowOf(dateStr) {
+  return new Date(dateStr + "T12:00:00Z").getUTCDay();
+}
+
+function daysBetween(a, b) {
+  return Math.round(
+    (Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000
+  );
+}
+
+// ---------------- Streak engine (MIRROR of js/streak.js) ----------------
+// KEEP IN SYNC with js/streak.js computeDerived(). The server needs the freeze
+// count to know whether a missed key day actually breaks the streak, and
+// freezes are DERIVED from full history — a cached snapshot is wrong exactly
+// when it matters (the engine spends the freeze while the app is closed).
+// scripts/test-notifications.mjs asserts parity between the two engines.
+
+var REQUIRED = { 1: true, 3: true, 4: true }; // Mon, Wed, Thu
+export var FREEZE_CAP = 1;
+export var EARN_EVERY = 3;
+
+function isRequiredDate(dateStr) {
+  return !!REQUIRED[dowOf(dateStr)];
+}
+
+export function mondayOf(dateStr) {
+  var wd = dowOf(dateStr); // 0 Sun .. 6 Sat
+  return addDaysStr(dateStr, wd === 0 ? -6 : 1 - wd);
+}
+
+// Weeks in which all three required days (Mon/Wed/Thu) were completed.
+function perfectWeeks(dayLog, todayStr) {
+  var completed = Object.keys(dayLog)
+    .filter(function (d) { return dayLog[d] && dayLog[d].reps > 0; })
+    .sort();
+  if (!completed.length) return 0;
+  var count = 0;
+  for (var wk = mondayOf(completed[0]); wk <= todayStr; wk = addDaysStr(wk, 7)) {
+    var mon = dayLog[wk], wed = dayLog[addDaysStr(wk, 2)], thu = dayLog[addDaysStr(wk, 3)];
+    if (mon && mon.reps >= 1 && wed && wed.reps >= 1 && thu && thu.reps >= 1) count++;
+  }
+  return count;
+}
+
+// dayLog: { "YYYY-MM-DD": { reps } }. Returns the same shape as the client's
+// computeDerived (minus the UI-only bits), plus `doneToday`.
+export function computeDerived(dayLog, todayStr) {
+  dayLog = dayLog || {};
+  var completedDates = Object.keys(dayLog)
+    .filter(function (d) { return dayLog[d] && dayLog[d].reps > 0; })
+    .sort();
+
+  var streak = 0, freezes = 0, earn = 0, longest = 0;
+  var freezesEarned = 0, freezesUsed = 0;
+  var totalCompleted = 0, goldDays = 0, bonusDaysDone = 0, totalSessions = 0;
+  var firstLog = completedDates.length ? completedDates[0] : null;
+  var sawReset = false, comeback = false;
+
+  if (completedDates.length) {
+    var start = completedDates[0] < todayStr ? completedDates[0] : todayStr;
+    for (var d = start; d <= todayStr; d = addDaysStr(d, 1)) {
+      var reps = (dayLog[d] && dayLog[d].reps) || 0;
+      var req = isRequiredDate(d);
+
+      if (reps >= 1) {
+        streak += 1;
+        if (streak > longest) longest = streak;
+        if (sawReset && streak >= 7) comeback = true;
+        totalCompleted += 1;
+        totalSessions += Math.min(reps, 2);
+        if (reps >= 2) goldDays += 1;
+        if (!req) bonusDaysDone += 1;
+        if (req) {
+          earn += 1;
+          if (earn >= EARN_EVERY) {
+            earn = 0;
+            if (freezes < FREEZE_CAP) { freezes += 1; freezesEarned += 1; }
+          }
+        }
+      } else if (d === todayStr) {
+        // today is never "missed" — it isn't over yet
+      } else if (req) {
+        earn = 0; // a protected miss still breaks the earn-counter
+        if (freezes > 0) {
+          freezes -= 1;
+          freezesUsed += 1; // streak holds flat
+        } else {
+          if (streak > 0) sawReset = true;
+          streak = 0;
+        }
+      }
+    }
+  }
+
+  return {
+    streak: streak,
+    freezes: freezes,
+    earnCounter: earn,
+    longestStreak: longest,
+    freezesEarned: freezesEarned,
+    freezesUsed: freezesUsed,
+    totalCompleted: totalCompleted,
+    goldDays: goldDays,
+    bonusDaysDone: bonusDaysDone,
+    totalSessions: totalSessions,
+    firstLog: firstLog,
+    perfectWeeks: perfectWeeks(dayLog, todayStr),
+    comeback: comeback,
+    doneToday: ((dayLog[todayStr] && dayLog[todayStr].reps) || 0) >= 1
+  };
+}
+
+// Mon/Wed/Thu completion for the Monday-based week containing `logicalDate`.
+export function weekProgress(dayLog, logicalDate) {
+  dayLog = dayLog || {};
+  var mon = mondayOf(logicalDate);
+  function done(dateStr) {
+    return ((dayLog[dateStr] && dayLog[dateStr].reps) || 0) >= 1;
+  }
+  return {
+    monDone: done(mon),
+    wedDone: done(addDaysStr(mon, 2)),
+    thuDone: done(addDaysStr(mon, 3))
+  };
 }
 
 // ---------------- Progression ("level up this exercise") ----------------
@@ -126,55 +255,272 @@ export function progressionFromRows(rows, holdSecs) {
   return null;
 }
 
-// Copy for the Sunday weekly "last chance" push, by sessions still needed.
-function weeklyLastChanceBody(remaining) {
-  if (remaining <= 1) return "One session between you and a full week. Sunday's almost gone — go.";
-  if (remaining === 2) return "You're 2 short of your 3 this week. It all resets tonight — move.";
-  return "Zero sessions this week. Salvage it tonight or it's a write-off.";
+// ---------------- Badge tiers (MIRROR of js/badges.js) ----------------
+// Only the two dimensions the copy can reference. KEEP IN SYNC with
+// js/badges.js DIMENSIONS — naming a badge that doesn't exist would be a lie.
+var STREAK_TIERS = [3, 7, 14, 30, 60, 100];
+var STREAK_NAMES = ["Three in a row", "First week", "Fortnight", "Month strong", "Two months", "Centurion"];
+var SESSION_TIERS = [1, 5, 10, 25, 100, 250, 500, 1000];
+var SESSION_NAMES = ["First session", "Five down", "Double digits", "Getting going",
+                     "Century", "250 club", "500 club", "Iron habit"];
+
+function tierName(tiers, names, value) {
+  var i = tiers.indexOf(value);
+  return i === -1 ? null : names[i];
+}
+
+// ---------------- Copy ----------------
+
+// Rotating pools, one per key day. `ok` is the normal set; `recover` is used
+// once the clean week is already gone, so the copy never promises a perfect
+// week that's mathematically dead.
+var POOLS = {
+  Mon: {
+    ok: [
+      "Monday. Three key days this week — this is the first.",
+      "Week starts here. Mon, Wed, Thu. Get the first one down.",
+      "Perfect week's still on the table. It starts today.",
+      "First of three. The week's easy to win from here and hard to win from Wednesday.",
+      "Nothing skipped yet. Keep it that way.",
+      "Monday sets the tone. Fifteen minutes and the week's already going your way."
+    ]
+  },
+  Wed: {
+    ok: [
+      "Wednesday. This is the one people skip.",
+      "Second of three. Halfway is where weeks fall apart.",
+      "Nobody skips Monday. Wednesday's the real test.",
+      "Wednesday's the hinge — do it and Thursday's a formality.",
+      "Two-thirds of the week rides on today.",
+      "Get through today and the week's basically yours."
+    ],
+    recover: [
+      "Monday slipped. Don't make it two.",
+      "Monday's gone. Wednesday and Thursday are what's left.",
+      "You can still get two of three. Starts now."
+    ]
+  },
+  Thu: {
+    ok: [
+      "Thursday. Last key day — finish the week clean.",
+      "Final of three. Don't leave it at two.",
+      "Close it out. Nothing required after today.",
+      "Two down. Land this one.",
+      "Thursday's the payoff. The week's done after this.",
+      "One session between you and a clean week."
+    ],
+    recover: [
+      "The week got away. The streak doesn't have to.",
+      "Clean week's off the table. Today's still worth doing.",
+      "Two missed. Don't make it three."
+    ]
+  }
+};
+
+// Deterministic rotation — Math.random() would break the idempotency story and
+// make the engine untestable. Index by weeks elapsed since the first log.
+export function weekIndexFor(firstLog, logicalDate) {
+  if (!firstLog) return 0;
+  var n = Math.floor(daysBetween(mondayOf(firstLog), mondayOf(logicalDate)) / 7);
+  return n < 0 ? 0 : n;
+}
+
+function pick(list, idx) {
+  return list[((idx % list.length) + list.length) % list.length];
+}
+
+// The day's rotating line, swapped for a recovery line once the clean week is
+// dead. On Thursday with exactly one key day missed we can name it.
+function poolLine(dow, week, idx) {
+  var p = POOLS[dow];
+  if (!p) return "";
+  var alive = dow === "Mon" ||
+    (dow === "Wed" && week.monDone) ||
+    (dow === "Thu" && week.monDone && week.wedDone);
+  if (alive) return pick(p.ok, idx);
+  if (dow === "Thu") {
+    if (!week.monDone && week.wedDone) return "Monday's gone, but the streak isn't. Today keeps it.";
+    if (week.monDone && !week.wedDone) return "Wednesday's gone, but the streak isn't. Today keeps it.";
+  }
+  return pick(p.recover, idx);
+}
+
+// Selection ladder — first match wins (BUILD-SPEC-notifications.md §4.1).
+export function keyDayBody(dow, derived, week, progression, idx) {
+  // 1. today's session lands on a streak milestone
+  var milestone = tierName(STREAK_TIERS, STREAK_NAMES, derived.streak + 1);
+  if (milestone) return "Today makes " + (derived.streak + 1) + ". " + milestone + ".";
+
+  // 2. a perfect week is one session away
+  if (dow === "Thu" && week.monDone && week.wedDone) {
+    return "One session from a perfect week. Last key day.";
+  }
+
+  // 3. a sessions badge is one session away
+  var badge = tierName(SESSION_TIERS, SESSION_NAMES, derived.totalSessions + 1);
+  if (badge) return "One more session for " + badge + ". Today's the day.";
+
+  // 4. an exercise is ready to level up — more useful than any generic line
+  if (progression) {
+    return derived.streak >= 7 ? "Day " + derived.streak + ". " + progression : progression;
+  }
+
+  // 5. a streak worth naming leads with the number
+  if (derived.streak >= 7) return "Day " + derived.streak + ". " + poolLine(dow, week, idx);
+
+  // 6. nothing to lose — frame it as a restart
+  if (derived.streak === 0) {
+    return "Streak's at zero. " + longDayName(dow) + "'s the cheapest day to restart it.";
+  }
+
+  // 7. the rotating pool
+  return poolLine(dow, week, idx);
+}
+
+function longDayName(dow) {
+  return DOW_NAME[SHORT_TO_INDEX[dow]];
+}
+
+// The evening warning. Only ever sent when the streak is genuinely at stake —
+// see dueNotifications. A banked freeze changes the stakes, not the urgency:
+// the freeze burns, the streak holds FLAT (js/streak.js:81 — it does not grow),
+// and the earn counter resets, so three more key days are needed to re-bank.
+export function warningCopy(derived, idx) {
+  var n = derived.streak;
+  if (derived.freezes > 0) {
+    return pick([
+      { title: "Your only freeze is on the line",
+        body: "Skip and it burns. Your streak holds at " + n + " — it won't grow — and you're unprotected after." },
+      { title: "Today costs you either way",
+        body: "Do it and you're at " + (n + 1) + ". Skip it and you're still at " + n + ", with no freeze left." },
+      { title: "The freeze isn't a free pass",
+        body: "It stops the reset. It doesn't move you forward — and it's your last one." }
+    ], idx);
+  }
+  if (n <= 2) {
+    return { title: "Don't let it die at " + n,
+             body: "No freeze banked. Miss today and you're starting from scratch." };
+  }
+  return pick([
+    { title: n + " days gone tonight",
+      body: "No freeze left. Skip today and the streak resets to zero." },
+    { title: n + " days, one skip from zero",
+      body: "Nothing to catch you. The flow takes fifteen minutes." },
+    { title: "This is the one that breaks it",
+      body: n + " days, no freeze banked. Skip and you start again tomorrow." }
+  ], idx);
+}
+
+// Sunday recap — the one push that isn't a demand. Scores the week that just
+// finished on its Mon/Wed/Thu, the same three days perfectWeeks() counts.
+export function recapCopy(derived, week) {
+  var days = [
+    { done: week.monDone, name: "Monday" },
+    { done: week.wedDone, name: "Wednesday" },
+    { done: week.thuDone, name: "Thursday" }
+  ];
+  var hit = days.filter(function (d) { return d.done; }).length;
+  var missed = days.filter(function (d) { return !d.done; });
+  var n = derived.streak;
+
+  if (hit === 3) {
+    return "3 of 3. Perfect week #" + derived.perfectWeeks + ", streak at " + n +
+      ". Same again from tomorrow.";
+  }
+  if (hit === 2) {
+    return "2 of 3 — " + missed[0].name + " got away. Streak at " + n +
+      ". Clean sweep next week, starting Monday.";
+  }
+  if (hit === 1) {
+    return "One key day out of three. That's not a habit yet. Monday, Wednesday, Thursday — all three.";
+  }
+  return "Blank week. Streak's at " + n + ". Monday resets everything.";
+}
+
+// ---------------- Scheduling ----------------
+
+var DEFAULTS = { enabled: true, keyDayTime: "09:00", warningTime: "18:00", recapEnabled: true };
+
+// Read the notify block, falling back to the legacy reminder settings so a
+// device that hasn't been updated yet still behaves sensibly.
+export function notifySettings(settings) {
+  settings = settings || {};
+  var n = settings.notify;
+  if (n && typeof n === "object") {
+    return {
+      enabled: n.enabled !== false,
+      keyDayTime: n.keyDayTime || DEFAULTS.keyDayTime,
+      warningTime: n.warningTime || DEFAULTS.warningTime,
+      recapEnabled: n.recapEnabled !== false
+    };
+  }
+  var legacyTimes = settings.reminderTimes || [];
+  return {
+    enabled: settings.remindersEnabled !== false,
+    keyDayTime: legacyTimes[0] || DEFAULTS.keyDayTime,
+    warningTime: DEFAULTS.warningTime,
+    recapEnabled: true
+  };
 }
 
 // Decide which pushes are due for one subscription at this instant.
-//   local         — result of localNow()
-//   reminderTimes — array of "HH:MM" from profile.settings (may be missing)
-//   flowDoneToday — truthy when day_log has reps >= 1 for local.logicalDate
-//   weekSessions  — count of days in the current Mon–Sun week with reps >= 1
-//   progression   — advice string from progressionFromRows(), or null; appended
-//                   to reminder pushes so "level up X" arrives when actionable
-// Returns [{slot, title, body}] — slot is the idempotency key (unique per
+//   local       — result of localNow()
+//   notify      — result of notifySettings()
+//   derived     — result of computeDerived() for this subscription's full log
+//   week        — result of weekProgress() for the current Monday-based week
+//   progression — advice string from progressionFromRows(), or null
+// Returns [{slot, title, body, url}] — slot is the idempotency key (unique per
 // endpoint per calendar occurrence).
-export function dueNotifications(local, reminderTimes, flowDoneToday, weekSessions, progression) {
+export function dueNotifications(local, notify, derived, week, progression) {
   var due = [];
-  (reminderTimes || []).forEach(function (t, i) {
-    if (floorSlot(t) === local.hhmm) {
-      var body = i % 2 === 0
-        ? "Posture check: drop your shoulders, tuck your chin — time for your flow."
-        : "Desk break: stand up, squeeze your glutes, and run your daily flow.";
-      if (progression) body += " And today: " + progression;
+  if (!notify || !notify.enabled) return due;
+  if (!derived || !derived.firstLog) return due; // no history — nothing to say
+
+  var idx = weekIndexFor(derived.firstLog, local.logicalDate);
+  var atKeyDayTime = local.hhmm === floorSlot(notify.keyDayTime);
+  var atWarningTime = local.hhmm === floorSlot(notify.warningTime);
+
+  if (isRequiredDow(local.logicalDow) && !derived.doneToday) {
+    if (atKeyDayTime) {
       due.push({
-        slot: local.logicalDate + " " + local.hhmm,
-        title: "Level Up",
-        body: body
+        slot: local.logicalDate + " keyday",
+        title: longDayName(local.logicalDow) + " — key day",
+        body: keyDayBody(local.logicalDow, derived, week, progression, idx),
+        url: "./#flow"
       });
     }
-  });
-  // Evening check (~6pm). Two mutually-exclusive risk pushes (Sun isn't a key day):
-  if (local.hhmm === EVENING_CHECK) {
-    // Daily streak risk — key day, flow not done.
-    if (isRequiredDow(local.logicalDow) && !flowDoneToday) {
+    // Only warn when the streak is genuinely at stake. At 0 there is nothing to
+    // lose and the morning nudge already carries the restart framing.
+    if (atWarningTime && derived.streak >= 1) {
+      var w = warningCopy(derived, idx);
       due.push({
-        slot: local.logicalDate + " streak",
-        title: "Your streak's on the line ⚠️",
-        body: "It's a key day and today's flow isn't done. Knock it out before the day slips."
-      });
-    }
-    // Weekly goal risk — Sunday, fewer than 3 sessions this week.
-    if (local.logicalDow === "Sun" && (weekSessions || 0) < 3) {
-      due.push({
-        slot: local.logicalDate + " lastchance",
-        title: "Last chance ⏳",
-        body: weeklyLastChanceBody(3 - (weekSessions || 0))
+        slot: local.logicalDate + " warn",
+        title: w.title,
+        body: w.body,
+        url: "./#flow"
       });
     }
   }
+
+  if (local.logicalDow === "Sun" && notify.recapEnabled && atWarningTime) {
+    due.push({
+      slot: local.logicalDate + " recap",
+      title: "Your week",
+      body: recapCopy(derived, week),
+      url: "./"
+    });
+  }
+
   return due;
+}
+
+// True when a push could possibly be due at this instant — lets index.ts skip
+// the day_log fetch on the ~285 daily cron ticks that can never send anything.
+export function slotCouldFire(local, notify) {
+  if (!notify || !notify.enabled) return false;
+  var key = isRequiredDow(local.logicalDow);
+  var sun = local.logicalDow === "Sun" && notify.recapEnabled;
+  if (key && local.hhmm === floorSlot(notify.keyDayTime)) return true;
+  if ((key || sun) && local.hhmm === floorSlot(notify.warningTime)) return true;
+  return false;
 }

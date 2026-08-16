@@ -29,6 +29,16 @@
       settingsUpdatedAt: new Date().toISOString(),
       settings: {
         imageStyle: "illustrations", // "illustrations" | "photos" | "color"
+        // Push notifications (BUILD-SPEC-notifications.md §5). Read by the
+        // send-reminders Edge Function via the synced profile row.
+        notify: {
+          enabled: true,        // master switch — governs ALL pushes
+          keyDayTime: "09:00",  // key-day nudge, Mon/Wed/Thu
+          warningTime: "18:00", // streak warning + Sunday recap
+          recapEnabled: true    // Sunday recap on/off
+        },
+        // Legacy reminder fields — superseded by `notify`, kept so a device
+        // that hasn't updated yet still reads something sensible.
         remindersEnabled: true,
         reminderTimes: ["11:00", "15:00"],
         timingEnabled: true, // when on at finish, the flow's duration is recorded
@@ -81,6 +91,27 @@
     return changed;
   }
 
+  // Notification settings migration (BUILD-SPEC-notifications.md §5.2).
+  // Idempotent: seeds `notify` from the legacy reminder fields the first time,
+  // then only fills gaps. The legacy fields are deliberately NOT deleted — an
+  // un-updated device syncing its settings back must not clobber anything.
+  var NOTIFY_DEFAULTS = { enabled: true, keyDayTime: "09:00", warningTime: "18:00", recapEnabled: true };
+
+  function normalizeNotify(settings) {
+    if (!settings) return false;
+    var had = settings.notify && typeof settings.notify === "object";
+    var before = JSON.stringify(had ? settings.notify : null);
+    var seeded = {
+      // With no notify block at all, inherit the old master toggle.
+      enabled: had ? NOTIFY_DEFAULTS.enabled : settings.remindersEnabled !== false,
+      keyDayTime: (settings.reminderTimes || [])[0] || NOTIFY_DEFAULTS.keyDayTime,
+      warningTime: NOTIFY_DEFAULTS.warningTime,
+      recapEnabled: NOTIFY_DEFAULTS.recapEnabled
+    };
+    settings.notify = Object.assign(seeded, had ? settings.notify : {});
+    return JSON.stringify(settings.notify) !== before;
+  }
+
   function emptyTiming() {
     return {
       timedSessions: 0,   // completed, timing-enabled flows
@@ -98,6 +129,9 @@
         var s = JSON.parse(raw);
         // Backfill any fields added since first install
         var d = defaultState();
+        // Seed `notify` from the legacy fields BEFORE the backfill, or the
+        // fresh defaults would win and the old reminder time would be lost.
+        var notifyChanged = normalizeNotify(s.settings);
         s.settings = Object.assign(d.settings, s.settings || {});
         s.dayLog = s.dayLog || {};
         s.strengthLog = s.strengthLog || [];
@@ -105,7 +139,7 @@
         s.timing = Object.assign(emptyTiming(), s.timing || {});
         s.timingUpdatedAt = s.timingUpdatedAt || d.timingUpdatedAt;
         s.badgesSeen = s.badgesSeen || [];
-        if (migrateIds(s)) localStorage.setItem(LS_KEY, JSON.stringify(s)); // persist the remap
+        if (migrateIds(s) || notifyChanged) localStorage.setItem(LS_KEY, JSON.stringify(s));
         return s;
       }
     } catch (e) { /* corrupted state -> start fresh */ }
@@ -236,6 +270,8 @@
 
     if (!state.settingsUpdatedAt || (p.updated_at && p.updated_at > state.settingsUpdatedAt)) {
       state.settings = Object.assign(state.settings, p.settings || {});
+      // A remote row may predate `notify`, or carry a partial one — refill.
+      normalizeNotify(state.settings);
       state.settingsUpdatedAt = p.updated_at;
     }
     if (p.created_at && p.created_at < state.createdAt) state.createdAt = p.created_at;

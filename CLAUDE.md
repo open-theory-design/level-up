@@ -81,11 +81,23 @@ scoped by the private sync code, not the key (an accepted MVP trade-off — see 
 
 ## Push notifications (closed-app)
 Web Push + VAPID → a **Supabase Edge Function** (`supabase/functions/send-reminders/`)
-→ scheduled by **pg_cron**. Fires at each device's local reminder times plus a
-streak-saver on required days. Idempotent via a `push_log` slot key; dead endpoints
-self-prune. VAPID public key in `config.js`; private key only in Edge Function
-secrets. Full setup in `DEPLOY.md §5`. Backend is platform-agnostic — iOS needs
-Home-Screen install + a user-gesture permission prompt (see `ONBOARDING.md §6`).
+→ scheduled by **pg_cron**. Exactly three pushes: a **key-day nudge** (Mon/Wed/Thu,
+skipped once the flow is done), a **streak warning** (same days, only when the
+streak is genuinely at stake), and a **Sunday recap**. Rest days are silent.
+Idempotent via a `push_log` slot key; dead endpoints self-prune. VAPID public key
+in `config.js`; private key only in Edge Function secrets. Full design + copy in
+`BUILD-SPEC-notifications.md`, setup in `DEPLOY.md §5`. Backend is
+platform-agnostic — iOS needs Home-Screen install + a user-gesture permission
+prompt (see `ONBOARDING.md §6`).
+
+**Two engines must stay in sync.** `logic.js` mirrors *both* the progression
+rules (from `js/app.js`) and `computeDerived` (from `js/streak.js`). The streak
+mirror exists because the warning copy must know the **freeze** count, which is
+derived from full history — a cached snapshot is wrong exactly when it matters,
+since the engine spends the freeze while the app is closed. Guard the mirrors
+with `node scripts/test-notifications.mjs` after touching either side.
+Notification copy also names badges, so `logic.js` carries a small tier mirror of
+`js/badges.js` — never let it name a badge that doesn't exist.
 
 ## Deploy
 Static host (Vercel or GitHub Pages). **Two independent systems:** the GitHub→Vercel
@@ -98,3 +110,5 @@ is live immediately with no code push; a UI change needs commit + push + redeplo
 - `PostureFlow-PRD.md` — product spec (streak/freeze rules, views, data model)
 - `DEPLOY.md` — Supabase schema + grants + hosting + PWA install + push setup (§5)
 - `BUILD-SPEC-heatmap-milestones-celebrations.md` — heatmap / badges / celebration details
+- `BUILD-SPEC-notifications.md` — the notification set, copy matrix, and why the
+  streak engine is mirrored server-side

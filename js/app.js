@@ -10,7 +10,6 @@
   var weekOffset = 0; // 0 = current week; negative = past weeks (day strip navigation)
   var flowStartReps = 0; // today's reps when the flow was opened (for celebration)
   var strengthOpen = false;
-  var firedReminders = {}; // "YYYY-MM-DD HH:MM" -> true
   var app = document.getElementById("app");
 
   // Flow timing: measured silently every run; only committed to lifetime
@@ -57,10 +56,6 @@
   }
 
   var DOW_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
-  var REMINDER_MSGS = [
-    "Posture check: drop your shoulders, tuck your chin.",
-    "Desk break: stand up and squeeze your glutes for 10 seconds."
-  ];
   var LIFT_PLACEHOLDER_HINTS = { hip_thrust: [70, 10], bulgarian: [20, 8], squat: [80, 6], deadlift: [100, 5] };
   // Section headers in the daily-flow list: exercises 1–6 target the rounded-
   // shoulder "hunch" (upper crossed); 7–15 target the hips/glutes (lower
@@ -124,7 +119,7 @@
   // ---------------- Toast ----------------
 
   var toastTimer = null;
-  function toast(msg, kind) {
+  function toast(msg, ms) {
     var el = document.querySelector(".toast");
     if (!el) {
       el = document.createElement("div");
@@ -132,10 +127,10 @@
       document.body.appendChild(el);
     }
     el.textContent = msg;
-    el.className = "toast" + (kind === "reminder" ? " reminder" : "");
+    el.className = "toast";
     requestAnimationFrame(function () { el.classList.add("show"); });
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.classList.remove("show"); }, kind === "reminder" ? 8000 : 2600);
+    toastTimer = setTimeout(function () { el.classList.remove("show"); }, ms || 2600);
   }
 
   // ---------------- Day-completion celebration (BUILD-SPEC §3) ----------------
@@ -1283,9 +1278,7 @@
   function renderSettings() {
     var s = state.settings;
     var configured = PFStore.isConfigured();
-    var times = s.reminderTimes.map(function (t, i) {
-      return '<input type="time" value="' + esc(t) + '" data-reminder-index="' + i + '">';
-    }).join(" ");
+    var n = s.notify || {};
 
     return (
       '<div class="subnav"><button class="back" data-action="goto" data-view="dashboard" aria-label="Back">' + BACK_SVG + '</button><h2>Settings</h2></div>' +
@@ -1341,15 +1334,33 @@
           "</div></div>" +
       "</div>" +
 
-      '<div class="card"><div class="card-title">Reminders &amp; notifications</div>' +
-        '<div class="set-row"><span class="set-label">In-app reminders' +
-          '<span class="set-sub">Fire while the app is open</span></span>' +
-          '<button class="toggle' + (s.remindersEnabled ? " on" : "") + '" data-action="toggle-reminders" role="switch" aria-checked="' + s.remindersEnabled + '" aria-label="Reminders"></button>' +
+      '<div class="card"><div class="card-title">Notifications</div>' +
+        '<div class="set-row"><span class="set-label">Send notifications' +
+          '<span class="set-sub">Key-day nudges and streak warnings. Nothing on rest days.</span></span>' +
+          toggleBtn(n.enabled, "toggle-notify", "Notifications") +
         "</div>" +
-        '<div class="set-row"><span class="set-label">Times</span><span>' + times + "</span></div>" +
+        (n.enabled
+          ? '<div class="set-row"><span class="set-label">Key day nudge' +
+              '<span class="set-sub">Mon, Wed, Thu — skipped once the flow is done</span></span>' +
+              '<input type="time" value="' + esc(n.keyDayTime || "09:00") + '" data-notify-time="keyDayTime">' +
+            "</div>" +
+            '<div class="set-row"><span class="set-label">Streak warning' +
+              '<span class="set-sub">Only when you’d actually lose it. Also sets the Sunday recap.</span></span>' +
+              '<input type="time" value="' + esc(n.warningTime || "18:00") + '" data-notify-time="warningTime">' +
+            "</div>" +
+            '<div class="set-row"><span class="set-label">Sunday recap' +
+              '<span class="set-sub">How the week went</span></span>' +
+              toggleBtn(n.recapEnabled, "toggle-recap", "Sunday recap") +
+            "</div>"
+          : "") +
         renderPushRow() +
       "</div>"
     );
+  }
+
+  function toggleBtn(on, action, label) {
+    return '<button class="toggle' + (on ? " on" : "") + '" data-action="' + action +
+      '" role="switch" aria-checked="' + !!on + '" aria-label="' + esc(label) + '"></button>';
   }
 
   // The push row's states: unsupported browser -> note; permission denied ->
@@ -1486,8 +1497,10 @@
     var url = PFStore.pushFunctionUrl();
     if (!url) return;
     var key = (window.POSTUREFLOW_CONFIG || {}).SUPABASE_ANON_KEY;
+    // Target this device only — otherwise a test buzzes every subscribed device.
+    var only = pushState.endpoint ? "&endpoint=" + encodeURIComponent(pushState.endpoint) : "";
     toast("Sending test notification…");
-    fetch(url + "?test=1", {
+    fetch(url + "?test=1" + only, {
       method: "POST",
       headers: { apikey: key, Authorization: "Bearer " + key }
     }).then(function (r) {
@@ -1652,6 +1665,17 @@
 
   // ---------------- Event delegation ----------------
 
+  // Enter the daily flow from a fresh start. Shared by the button and by the
+  // "./#flow" deep link a notification tap carries.
+  function openFlow() {
+    flowIndex = 0;
+    flowStartReps = (state.dayLog[today()] || {}).reps || 0;
+    repVals = {}; // fresh stepper values each run
+    stopHold();
+    timingStart();
+    view = "flow";
+  }
+
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest("[data-action]");
     if (!btn) return;
@@ -1662,15 +1686,7 @@
       if (view === "settings") refreshPushState(); // async; re-renders when it lands
       render();
     }
-    else if (a === "start-flow") {
-      flowIndex = 0;
-      flowStartReps = (state.dayLog[today()] || {}).reps || 0;
-      repVals = {}; // fresh stepper values each run
-      stopHold();
-      timingStart();
-      view = "flow";
-      render();
-    }
+    else if (a === "start-flow") { openFlow(); render(); }
     else if (a === "preview-badge") {
       // Preview only — shows the most advanced badge already earned, or a
       // sample when none are. Never writes, never touches badgesSeen.
@@ -1802,8 +1818,12 @@
     }
     else if (a === "toggle-push") { if (pushState.subscribed) disablePush(); else enablePush(); }
     else if (a === "test-push") sendTestPush();
-    else if (a === "toggle-reminders") {
-      state.settings.remindersEnabled = !state.settings.remindersEnabled;
+    else if (a === "toggle-notify" || a === "toggle-recap") {
+      var key = a === "toggle-notify" ? "enabled" : "recapEnabled";
+      state.settings.notify[key] = !state.settings.notify[key];
+      // The legacy flag shadows the master switch so an un-updated device
+      // doesn't keep sending after notifications are turned off here.
+      if (key === "enabled") state.settings.remindersEnabled = state.settings.notify.enabled;
       state.settingsUpdatedAt = new Date().toISOString();
       save(); render();
     }
@@ -1811,8 +1831,8 @@
 
   document.addEventListener("change", function (ev) {
     var t = ev.target;
-    if (t.matches("[data-reminder-index]") && t.value) {
-      state.settings.reminderTimes[Number(t.dataset.reminderIndex)] = t.value;
+    if (t.matches("[data-notify-time]") && t.value) {
+      state.settings.notify[t.dataset.notifyTime] = t.value;
       state.settingsUpdatedAt = new Date().toISOString();
       save();
     }
@@ -1847,38 +1867,36 @@
     if (view === "dashboard") render();
   });
 
-  // ---------------- In-app reminders (PRD §5.5) ----------------
+  // ---------------- Foreground pushes ----------------
+  // The service worker hands a push to the page instead of raising an OS
+  // notification when a window is visible, so one reminder is always one
+  // signal. Permission is requested from the Settings toggle, never cold.
 
-  var reminderCounter = 0;
-  setInterval(function () {
-    if (!state.settings.remindersEnabled) return;
-    var now = new Date();
-    var hhmm = (now.getHours() < 10 ? "0" : "") + now.getHours() + ":" +
-               (now.getMinutes() < 10 ? "0" : "") + now.getMinutes();
-    if (state.settings.reminderTimes.indexOf(hhmm) === -1) return;
-    var key = today() + " " + hhmm;
-    if (firedReminders[key]) return;
-    firedReminders[key] = true;
-    var msg = REMINDER_MSGS[reminderCounter++ % REMINDER_MSGS.length];
-    toast(msg, "reminder");
-    if ("Notification" in window && Notification.permission === "granted") {
-      try { new Notification("Level Up", { body: msg }); } catch (e) { /* not supported */ }
-    }
-  }, 20000);
-
-  // Ask for notification permission lazily on first interaction (optional,
-  // only enhances reminders while the app is open).
-  document.addEventListener("click", function askOnce() {
-    document.removeEventListener("click", askOnce);
-    if ("Notification" in window && Notification.permission === "default") {
-      try { Notification.requestPermission(); } catch (e) { /* ignore */ }
-    }
-  }, { once: true });
+  if (navigator.serviceWorker) {
+    navigator.serviceWorker.addEventListener("message", function (ev) {
+      var d = ev.data || {};
+      if (d.type === "push") {
+        toast(d.body || d.title || "Level Up", 8000);
+      } else if (d.type === "open" && String(d.url || "").indexOf("#flow") !== -1) {
+        // Notification tapped while the app was already open: focusing an
+        // existing window doesn't change the hash, so the SW tells us instead.
+        if (view !== "flow") { openFlow(); render(); }
+      }
+    });
+  }
 
   // ---------------- Startup sync ----------------
 
   initBadgeBaseline(); // adopt existing history as baseline — no retroactive flood
   refreshPushState(); // warm the push-toggle state before Settings is opened
+
+  // Deep link: nudge/warning pushes carry "./#flow" so a tap lands straight in
+  // the flow (BUILD-SPEC-notifications.md §7.3). Strip it so a reload doesn't
+  // silently restart the flow.
+  if (location.hash === "#flow") {
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* file:// */ }
+    openFlow();
+  }
   render();
 
   if (PFStore.isConfigured()) {

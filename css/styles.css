@@ -1485,7 +1485,7 @@ input[type="time"] {
 }
 .subnav h2 { font-size: 20px; }
 
-/* ---------- Toast / reminder banner ---------- */
+/* ---------- Toast ---------- */
 
 /* Top of screen: the bottom is occupied by the flow's primary button, which
    shares --primary — a toast there was invisible against it. */
@@ -1509,7 +1509,6 @@ input[type="time"] {
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.reminder { background: var(--teal); color: var(--on-primary); }
 
 /* ---------- Photo placeholder ---------- */
 
