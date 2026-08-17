@@ -185,6 +185,79 @@
       shoe(150, 150, 1) +
       limb("M120 96 L178 110", SKIN, 13) +           // extended leg out
       arrow("M120 126 L120 110")                     // drive-up cue
+    ),
+
+    // ---- Progression-ladder variants (keyed "<id>@<level>") ----
+    // side_plank / deadbugs have no colour base — they fall back to the
+    // line-art variants via PF_IMAGES.color().
+
+    // Paused Bird Dogs — hold bars at the reaching hand and foot.
+    "bird_dogs@1": svg(
+      floor() +
+      limb("M96 98 L96 148", SKIN, 13) +
+      limb("M150 98 L150 148", SKIN, 13) +
+      limb("M96 98 L150 98", TOP, 24) +
+      limb("M96 98 L56 84", SKIN, 12) +
+      limb("M150 98 L192 84", SKIN, 12) +
+      head(86, 94, 12, -1) +
+      limb("M46 62 v12 M54 62 v12", ACC, 4) +        // pause at the hand
+      limb("M184 62 v12 M192 62 v12", ACC, 4)        // pause at the foot
+    ),
+    // Elbow-to-Knee Bird Dogs — back rounds, elbow meets knee under the body.
+    "bird_dogs@2": svg(
+      floor() +
+      limb("M96 98 L96 148", SKIN, 13) +
+      limb("M150 98 L150 148", SKIN, 13) +
+      limb("M96 98 Q123 80 150 98", TOP, 24) +       // rounded back
+      limb("M96 98 L120 120", SKIN, 12) +            // elbow crunching under
+      limb("M150 98 L132 120", SKIN, 12) +           // knee driving to meet it
+      head(90, 100, 12, -1) +
+      arrow("M126 134 L126 126")
+    ),
+    // Clamshells with a heavier band — the band drawn thick and dark.
+    "clamshells@1": svg(
+      floor() +
+      head(58, 122, 13, 1) +
+      limb("M74 128 L128 132", TOP, 24) +
+      limb("M128 132 L152 142 L176 142", SKIN, 13) +
+      limb("M128 130 L150 118 L172 128", SKIN, 12) +
+      '<path d="M148 140 q7 -9 9 -18" fill="none" stroke="' + TOP + '" stroke-width="7" stroke-linecap="round"/>' +  // heavy band
+      arrow("M176 118 Q182 128 176 138")
+    ),
+    // Paused Clamshells — heavy band + hold bars at the open position.
+    "clamshells@2": svg(
+      floor() +
+      head(58, 122, 13, 1) +
+      limb("M74 128 L128 132", TOP, 24) +
+      limb("M128 132 L152 142 L176 142", SKIN, 13) +
+      limb("M128 130 L150 118 L172 128", SKIN, 12) +
+      '<path d="M148 140 q7 -9 9 -18" fill="none" stroke="' + TOP + '" stroke-width="7" stroke-linecap="round"/>' +  // heavy band
+      limb("M178 104 v12 M186 104 v12", ACC, 4)      // 2s squeeze at the top
+    ),
+    // Weighted Hip Thrusts — dumbbell resting across the lifted hips.
+    "hip_thrusts@1": svg(
+      floor() +
+      '<rect x="44" y="98" width="34" height="14" rx="3" fill="' + PROP + '"/>' +
+      head(56, 90, 12, 1) +
+      limb("M66 100 L120 96", TOP, 24) +
+      limb("M120 96 L150 118 L150 150", SKIN, 13) +
+      shoe(150, 150, 1) +
+      limb("M120 96 L178 110", SKIN, 13) +
+      '<rect x="106" y="74" width="30" height="6" rx="3" fill="' + SHOE + '"/>' +   // dumbbell bar
+      '<rect x="100" y="66" width="8" height="22" rx="2" fill="' + SHOE + '"/>' +   // dumbbell heads
+      '<rect x="134" y="66" width="8" height="22" rx="2" fill="' + SHOE + '"/>'
+    ),
+    // Elevated Single-Leg Hip Thrusts — shoulders up on the couch, full range.
+    "hip_thrusts@2": svg(
+      floor() +
+      '<rect x="36" y="86" width="40" height="20" rx="4" fill="' + PROP + '"/>' +   // couch / bench
+      '<rect x="36" y="106" width="10" height="46" rx="3" fill="' + PROP + '"/>' +
+      head(52, 78, 12, 1) +
+      limb("M62 90 L124 90", TOP, 24) +              // torso level with the bench
+      limb("M124 90 L152 114 L152 150", SKIN, 13) +  // planted leg
+      shoe(152, 150, 1) +
+      limb("M124 90 L184 104", SKIN, 13) +           // extended leg out
+      arrow("M124 122 L124 104")
     )
   };
 

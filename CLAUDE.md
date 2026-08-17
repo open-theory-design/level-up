@@ -97,7 +97,9 @@ derived from full history — a cached snapshot is wrong exactly when it matters
 since the engine spends the freeze while the app is closed. Guard the mirrors
 with `node scripts/test-notifications.mjs` after touching either side.
 Notification copy also names badges, so `logic.js` carries a small tier mirror of
-`js/badges.js` — never let it name a badge that doesn't exist.
+`js/badges.js` — never let it name a badge that doesn't exist. Same rule for
+progression ladders: `logic.js` `LADDER` mirrors the `levels` arrays in
+`js/exercises.js` (names only), and the harness asserts they match.
 
 ## Deploy
 Static host (Vercel or GitHub Pages). **Two independent systems:** the GitHub→Vercel
@@ -112,3 +114,5 @@ is live immediately with no code push; a UI change needs commit + push + redeplo
 - `BUILD-SPEC-heatmap-milestones-celebrations.md` — heatmap / badges / celebration details
 - `BUILD-SPEC-notifications.md` — the notification set, copy matrix, and why the
   streak engine is mirrored server-side
+- `BUILD-SPEC-progression-ladders.md` — exercise upgrade ladders (levels, the
+  offer UI, per-level history stamping)

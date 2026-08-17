@@ -208,19 +208,50 @@ export var TRACK_META = [
   { id: "hip_thrusts", group: "B", sets: 2, target: 12 }
 ];
 
-export function progressionAdvice(exId, effSecs) {
-  return {
-    deadbugs: "Dead Bugs are getting easy — slow each lower to 4s or add a 2s pause. Don't add reps.",
-    bird_dogs: "Bird Dogs are getting easy — add a 3s pause at full reach, or slow the return.",
-    clamshells: "Clamshells: move up to the next band. Out of bands? Add a 2s squeeze at the top.",
-    hip_thrusts: "Hip Thrusts: time to add load — a dumbbell or plate across your hips.",
-    side_plank: effSecs >= 40
-      ? "Side Plank: 40s is the cap — progress the variation (top leg raised, or feet elevated)."
-      : "Side Plank: add 5 seconds — use the + beside the timer."
-  }[exId] || null;
+// ---------------- Progression ladders (MIRROR of js/exercises.js) ----------------
+// Level NAMES per exercise, in upgrade order — enough for the push copy to
+// point at the right movement. KEEP IN SYNC with the `levels` arrays in
+// js/exercises.js; naming a level that doesn't exist in the app is a lie.
+export var LADDER = {
+  side_plank:  ["Side Plank — Top Leg Raised", "Side Plank — Feet Elevated"],
+  deadbugs:    ["Tempo Dead Bugs", "Weighted Dead Bugs"],
+  bird_dogs:   ["Paused Bird Dogs", "Elbow-to-Knee Bird Dogs"],
+  clamshells:  ["Clamshells — Heavier Band", "Paused Clamshells — Heavy Band"],
+  hip_thrusts: ["Weighted Hip Thrusts", "Elevated Single-Leg Hip Thrusts"]
+};
+var BASE_NAME = {
+  side_plank: "Side Plank", deadbugs: "Dead Bugs", bird_dogs: "Bird Dogs",
+  clamshells: "Clamshells", hip_thrusts: "Hip Thrusts"
+};
+// Shown once an exercise has topped out its ladder (mirror of js/app.js).
+var TERMINAL_ADVICE = {
+  side_plank: "Feet-elevated at 40s — hold it there, or add a plate on your hip.",
+  deadbugs: "Top of the Dead Bug ladder — slow the lowers even more, or a touch more weight.",
+  bird_dogs: "Top of the Bird Dog ladder — slower, stricter, longer pauses.",
+  clamshells: "Top of the band ladder — chase slower, stricter reps.",
+  hip_thrusts: "Add weight to the single-leg version, 2kg at a time."
+};
+
+function levelName(exId, lvl) {
+  return lvl ? (LADDER[exId] || [])[lvl - 1] : BASE_NAME[exId];
 }
 
-// lastTwo = two most recent COMPLETED records [{s, diff}, …] (newest first).
+// lvl = the user's current ladder position for this exercise (0 = base).
+export function progressionAdvice(exId, effSecs, lvl) {
+  lvl = lvl || 0;
+  // Holds progress within the level first: below the 40s cap, add seconds.
+  if (exId === "side_plank" && effSecs < 40) {
+    return levelName(exId, lvl) + ": add 5 seconds — use the + beside the timer.";
+  }
+  if (lvl < (LADDER[exId] || []).length) {
+    // The upgrade button lives in the app — the push just points at it.
+    return levelName(exId, lvl) + ": next level unlocked — take the upgrade in your next flow.";
+  }
+  return TERMINAL_ADVICE[exId] || null;
+}
+
+// lastTwo = two most recent COMPLETED records at the current level
+// [{s, diff}, …] (newest first).
 export function progressionFor(exId, lastTwo, meta) {
   if (!meta || !lastTwo || lastTwo.length < 2) return null;
   var bothEasy = lastTwo.every(function (r) { return r.diff === "easy"; });
@@ -231,25 +262,28 @@ export function progressionFor(exId, lastTwo, meta) {
     });
     if (!atTarget) return null;
   }
-  return progressionAdvice(exId, meta.effSecs || 0);
+  return progressionAdvice(exId, meta.effSecs || 0, meta.lvl || 0);
 }
 
 // rows: recent day rows [{log_date, sets_log}, …] newest first.
 // holdSecs: profile.settings.holdSecs (per-exercise overrides), may be undefined.
+// exLevel:  profile.settings.exLevel (ladder positions), may be undefined.
 // Returns the FIRST qualifying advice in flow order, or null.
-export function progressionFromRows(rows, holdSecs) {
+export function progressionFromRows(rows, holdSecs, exLevel) {
   for (var m = 0; m < TRACK_META.length; m++) {
     var meta = TRACK_META[m];
+    var lvl = (exLevel || {})[meta.id] || 0;
     var lastTwo = [];
     for (var i = 0; i < (rows || []).length && lastTwo.length < 2; i++) {
       var rec = rows[i] && rows[i].sets_log && rows[i].sets_log[meta.id];
       if (!rec || !rec.s) continue;
+      if ((rec.lvl || 0) !== lvl) continue; // qualification restarts per level
       var complete = true;
       for (var k = 0; k < meta.sets; k++) if (rec.s[k] == null) complete = false;
       if (complete) lastTwo.push(rec);
     }
     var effSecs = meta.group === "S" ? ((holdSecs || {})[meta.id] || meta.secs) : 0;
-    var adv = progressionFor(meta.id, lastTwo, { group: meta.group, target: meta.target, effSecs: effSecs });
+    var adv = progressionFor(meta.id, lastTwo, { group: meta.group, target: meta.target, effSecs: effSecs, lvl: lvl });
     if (adv) return adv;
   }
   return null;

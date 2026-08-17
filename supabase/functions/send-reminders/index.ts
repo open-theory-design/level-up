@@ -119,9 +119,14 @@ Deno.serve(async (req) => {
 
     const derived = computeDerived(dayLog, local.logicalDate);
     const week = weekProgress(dayLog, local.logicalDate);
+    const s = settings as {
+      holdSecs?: Record<string, number>;
+      exLevel?: Record<string, number>;
+    } | null;
     const progression = progressionFromRows(
       (rows ?? []).filter((r) => r.sets_log),
-      (settings as { holdSecs?: Record<string, number> } | null)?.holdSecs
+      s?.holdSecs,
+      s?.exLevel // ladder positions — qualification is per level
     );
 
     const due = dueNotifications(local, notify, derived, week, progression);

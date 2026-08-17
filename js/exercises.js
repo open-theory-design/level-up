@@ -174,6 +174,122 @@
       '<path d="M112 108 L140 110 L140 134" ' + S + "/>" +          // planted leg
       '<path d="M112 108 L170 120" ' + S + "/>" +                    // extended leg out
       '<path d="M112 130 L112 114 M112 114 l-5 8 M112 114 l5 8" ' + T + "/>"  // drive up
+    ),
+
+    // ---- Progression-ladder variants (keyed "<id>@<level>") ----
+    // Same clinical style as the base drawings; each shows what actually
+    // changes at that level so the picture matches the new name/instructions.
+
+    // Side plank, top leg raised: bottom leg to the floor, top leg held up.
+    "side_plank@1": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M36 132 L74 132" ' + S + "/>" +                     // forearm on the floor
+      '<path d="M56 132 L66 104" ' + S + "/>" +                     // upper arm up to shoulder
+      '<circle cx="70" cy="94" r="10" ' + S + "/>" +                // head
+      '<path d="M76 102 L140 117" ' + S + "/>" +                    // torso to the hips
+      '<path d="M140 117 L202 132" ' + S + "/>" +                   // bottom leg to the floor
+      '<path d="M140 117 L200 94" ' + S + "/>" +                    // top leg raised
+      '<path d="M82 100 L98 74" ' + S + "/>" +                      // top arm to the ceiling
+      '<path d="M170 118 L170 100 M170 100 l-5 8 M170 100 l5 8" ' + T + "/>"  // lift the leg
+    ),
+    // Side plank, feet elevated on a step/couch: feet above the shoulders.
+    "side_plank@2": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M184 108 h32 M188 108 v26 M212 108 v26" ' + T + "/>" + // step / couch
+      '<path d="M36 132 L74 132" ' + S + "/>" +                     // forearm on the floor
+      '<path d="M56 132 L66 104" ' + S + "/>" +                     // upper arm up to shoulder
+      '<circle cx="70" cy="94" r="10" ' + S + "/>" +                // head
+      '<path d="M76 102 L196 108" ' + S + "/>" +                    // body to feet on the step
+      '<path d="M82 100 L98 74" ' + S + "/>" +                      // top arm to the ceiling
+      '<path d="M128 100 L128 84 M128 84 l-5 8 M128 84 l5 8" ' + T + "/>"  // hips high
+    ),
+    // Tempo dead bugs: same pose, dashed slow-motion arrow (4s lowers).
+    "deadbugs@1": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<circle cx="48" cy="120" r="10" ' + S + "/>" +
+      '<path d="M58 122 L150 122" ' + S + "/>" +
+      '<path d="M68 122 L74 84" ' + S + "/>" +
+      '<path d="M68 122 L36 104" ' + S + "/>" +
+      '<path d="M150 122 L146 84 L174 88" ' + S + "/>" +
+      '<path d="M150 122 L200 112" ' + S + "/>" +
+      '<path d="M188 106 L188 76" fill="none" stroke="#15AFA6" stroke-width="4" stroke-dasharray="5 7" stroke-linecap="round"/>' +  // slow travel
+      '<path d="M188 76 l-5 8 M188 76 l5 8 M188 106 l-5 -8 M188 106 l5 -8" ' + T + "/>"
+    ),
+    // Weighted dead bugs: dumbbell held vertically over the chest, legs move.
+    "deadbugs@2": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<circle cx="48" cy="120" r="10" ' + S + "/>" +
+      '<path d="M58 122 L150 122" ' + S + "/>" +
+      '<path d="M68 122 L64 84" ' + S + "/>" +                       // both arms straight up
+      '<path d="M78 122 L88 84" ' + S + "/>" +
+      '<path d="M56 80 h40" ' + S + "/>" +                            // dumbbell bar
+      '<path d="M56 73 v14 M96 73 v14" ' + S + "/>" +                 // dumbbell heads
+      '<path d="M150 122 L146 84 L174 88" ' + S + "/>" +
+      '<path d="M150 122 L200 112" ' + S + "/>" +
+      '<path d="M188 100 L188 82 M188 82 l-5 8 M188 82 l5 8" ' + T + "/>"
+    ),
+    // Paused bird dogs: pause bars at the reaching hand and foot.
+    "bird_dogs@1": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M96 92 L158 92" ' + S + "/>" +
+      '<path d="M100 92 L100 132 M152 92 L152 132" ' + S + "/>" +
+      '<circle cx="84" cy="86" r="11" ' + S + "/>" +
+      '<path d="M96 92 L44 78" ' + T + "/>" +
+      '<path d="M158 92 L212 78" ' + T + "/>" +
+      '<path d="M36 60 v12 M43 60 v12" ' + T + "/>" +                 // pause at the hand
+      '<path d="M205 60 v12 M212 60 v12" ' + T + "/>"                 // pause at the foot
+    ),
+    // Elbow-to-knee bird dogs: back rounds, elbow and knee meet under the body.
+    "bird_dogs@2": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M96 92 Q127 72 158 92" ' + S + "/>" +                 // rounded back
+      '<path d="M100 92 L100 132 M152 92 L152 132" ' + S + "/>" +
+      '<circle cx="88" cy="96" r="11" ' + S + "/>" +                  // head tucked
+      '<path d="M96 92 L121 114" ' + T + "/>" +                       // elbow crunching under
+      '<path d="M158 92 L133 114" ' + T + "/>" +                      // knee driving to meet it
+      '<path d="M123 122 h8" ' + T + "/>"                             // the meeting point
+    ),
+    // Clamshells with a heavier band: the band drawn thick and dark.
+    "clamshells@1": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<circle cx="50" cy="116" r="10" ' + S + "/>" +
+      '<path d="M62 120 L116 122" ' + S + "/>" +
+      '<path d="M116 122 L138 128 L150 134" ' + S + "/>" +
+      '<path d="M116 122 L140 108 L150 134" ' + S + "/>" +
+      '<path d="M138 128 L140 108" fill="none" stroke="#0C6B66" stroke-width="8" stroke-linecap="round"/>' +  // heavy band
+      '<path d="M150 122 Q176 106 158 86" ' + T + "/>" +
+      '<path d="M158 86 l-6 9 M158 86 l8 5" ' + T + "/>"
+    ),
+    // Paused clamshells: heavy band + hold bars at the open position.
+    "clamshells@2": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<circle cx="50" cy="116" r="10" ' + S + "/>" +
+      '<path d="M62 120 L116 122" ' + S + "/>" +
+      '<path d="M116 122 L138 128 L150 134" ' + S + "/>" +
+      '<path d="M116 122 L140 108 L150 134" ' + S + "/>" +
+      '<path d="M138 128 L140 108" fill="none" stroke="#0C6B66" stroke-width="8" stroke-linecap="round"/>' +  // heavy band
+      '<path d="M160 90 v12 M167 90 v12" ' + T + "/>"                 // 2s squeeze at the top
+    ),
+    // Weighted hip thrusts: dumbbell resting across the lifted hips.
+    "hip_thrusts@1": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<circle cx="52" cy="126" r="9" ' + S + "/>" +
+      '<path d="M62 128 L112 108" ' + S + "/>" +
+      '<path d="M112 108 L140 110 L140 134" ' + S + "/>" +
+      '<path d="M112 108 L170 120" ' + S + "/>" +
+      '<path d="M98 96 h28" ' + S + "/>" +                            // dumbbell bar on the hips
+      '<path d="M98 89 v14 M126 89 v14" ' + S + "/>" +                // dumbbell heads
+      '<path d="M112 130 L112 116 M112 116 l-5 8 M112 116 l5 8" ' + T + "/>"
+    ),
+    // Elevated single-leg hip thrusts: shoulders up on a couch/bench.
+    "hip_thrusts@2": svg(
+      '<line x1="20" y1="134" x2="220" y2="134" ' + G + "/>" +
+      '<path d="M28 110 h44 M34 110 v24 M66 110 v24" ' + T + "/>" +   // couch / bench
+      '<circle cx="44" cy="100" r="9" ' + S + "/>" +                  // head/shoulders on the bench
+      '<path d="M56 106 L124 96" ' + S + "/>" +                       // torso, hips high
+      '<path d="M124 96 L154 102 L154 134" ' + S + "/>" +             // planted leg
+      '<path d="M124 96 L190 108" ' + S + "/>" +                      // extended leg out
+      '<path d="M124 128 L124 112 M124 112 l-5 8 M124 112 l5 8" ' + T + "/>"
     )
   };
 
@@ -189,11 +305,49 @@
     { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", tips: ["Squeeze the glute of the stretching leg", "Push your hip forward"], avoid: ["Arching your lower back"] },
     { id: "couch_stretch",      name: "Couch Stretch",               dose: "2 × 45s per leg", tips: ["Rest your rear shin flat up a wall or couch", "Front foot planted, knee over ankle", "Squeeze the glute and tuck your pelvis under"], avoid: ["Arching your lower back", "Forcing into sharp knee pain"] },
     { id: "cat_cow",            name: "Cat/Cow",                     dose: "10 slow transitions", tips: ["Move slowly through your full spinal range", "Inhale as you drop your belly", "Exhale as you round your back"] },
-    { id: "deadbugs",           name: "Dead Bugs",                   dose: "2 × 20 (10 per side)", track: { type: "reps", sets: 2, target: 20 }, tips: ["Press your lower back flat into the floor", "Lower the opposite arm and leg slowly", "Move with control and keep breathing"], avoid: ["Letting your lower back arch off the floor"] },
-    { id: "side_plank",         name: "Side Plank",                  dose: "2 × 30s per side", track: { type: "hold", sets: 4, secs: 30, min: 15, max: 40 }, tips: ["Stack your feet and lift your hips high", "Hold a straight line from head to heels", "Push your bottom shoulder away from your ear"], avoid: ["Letting your hips sag toward the floor"] },
-    { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 20 (10 per side)", track: { type: "reps", sets: 2, target: 20 }, tips: ["Keep your torso still, like a tabletop", "Move slowly"] },
-    { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", track: { type: "reps", sets: 2, target: 15 }, tips: ["Isolate the burn to the side of your glute"], avoid: ["Rotating your torso"], nicheStock: true },
-    { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  track: { type: "reps", sets: 2, target: 12 }, tips: ["Drive through your heel", "Keep your gaze forward"], avoid: ["Looking up at the ceiling"] }
+    { id: "deadbugs",           name: "Dead Bugs",                   dose: "2 × 20 (10 per side)", track: { type: "reps", sets: 2, target: 20 }, tips: ["Press your lower back flat into the floor", "Lower the opposite arm and leg slowly", "Move with control and keep breathing"], avoid: ["Letting your lower back arch off the floor"],
+      levels: [
+        { name: "Tempo Dead Bugs", dose: "2 × 20 (10 per side)", sub: "Same 20 reps — 4-second lowers.",
+          tips: ["Count 4 slow seconds on every lower", "Lower back stays glued to the floor", "Exhale on the way down"],
+          avoid: ["Letting your lower back arch off the floor"] },
+        { name: "Weighted Dead Bugs", dose: "2 × 20 (10 per side)", sub: "Light dumbbell over your chest, legs do the work.",
+          tips: ["Hold a light dumbbell straight above your chest", "Arms stay vertical — only the legs move", "If your back arches, the weight is too heavy"],
+          avoid: ["Letting your lower back arch off the floor"] }
+      ] },
+    { id: "side_plank",         name: "Side Plank",                  dose: "2 × 30s per side", track: { type: "hold", sets: 4, secs: 30, min: 15, max: 40 }, tips: ["Stack your feet and lift your hips high", "Hold a straight line from head to heels", "Push your bottom shoulder away from your ear"], avoid: ["Letting your hips sag toward the floor"],
+      levels: [
+        { name: "Side Plank — Top Leg Raised", dose: "2 × 30s per side", sub: "Longer lever, same 30s holds.",
+          tips: ["Lift the top leg to hip height and hold it there", "Keep the hips stacked — don't roll back", "Both legs straight"],
+          avoid: ["Letting your hips sag toward the floor"] },
+        { name: "Side Plank — Feet Elevated", dose: "2 × 30s per side", sub: "Feet up on the couch. Holds reset to 30s.",
+          tips: ["Feet on a step or couch, elbow under shoulder", "Straight line from head to heels", "The higher the feet, the harder it gets"],
+          avoid: ["Letting your hips sag toward the floor"] }
+      ] },
+    { id: "bird_dogs",          name: "Bird Dogs",                   dose: "2 × 20 (10 per side)", track: { type: "reps", sets: 2, target: 20 }, tips: ["Keep your torso still, like a tabletop", "Move slowly"],
+      levels: [
+        { name: "Paused Bird Dogs", dose: "2 × 20 (10 per side)", sub: "3-second holds at full reach.",
+          tips: ["Hold 3 full seconds at the top", "Reach long through fingertips and heel", "Nothing else moves"] },
+        { name: "Elbow-to-Knee Bird Dogs", dose: "2 × 20 (10 per side)", sub: "Crunch under, then reach. Slow both ways.",
+          tips: ["Touch elbow to knee under your body, then re-extend", "Round your back slightly on the crunch, flatten on the reach", "Slow both directions"] }
+      ] },
+    { id: "clamshells",         name: "Banded Clamshells",           dose: "2 × 15 per side", track: { type: "reps", sets: 2, target: 15 }, tips: ["Isolate the burn to the side of your glute"], avoid: ["Rotating your torso"], nicheStock: true,
+      levels: [
+        { name: "Clamshells — Heavier Band", dose: "2 × 15 per side", sub: "Next band up. Same strict 15s.",
+          tips: ["Move up to the next band", "Same strict form — no torso roll", "The last 3 reps should burn"],
+          avoid: ["Rotating your torso"] },
+        { name: "Paused Clamshells — Heavy Band", dose: "2 × 15 per side", sub: "2-second squeeze at the top.",
+          tips: ["Squeeze 2 full seconds at the top", "Keep tension through the whole set — never let the band go slack"],
+          avoid: ["Rotating your torso"] }
+      ] },
+    { id: "hip_thrusts",        name: "Leg-Out Hip Thrusts",         dose: "2 × 12 per leg",  track: { type: "reps", sets: 2, target: 12 }, tips: ["Drive through your heel", "Keep your gaze forward"], avoid: ["Looking up at the ceiling"],
+      levels: [
+        { name: "Weighted Hip Thrusts", dose: "2 × 12 per leg", sub: "Dumbbell across the hips.",
+          tips: ["Rest a dumbbell or plate across your hips", "Drive through your heel, squeeze at the top", "Chin tucked, gaze forward"],
+          avoid: ["Looking up at the ceiling"] },
+        { name: "Elevated Single-Leg Hip Thrusts", dose: "2 × 12 per leg", sub: "Shoulders on the couch, full range.",
+          tips: ["Shoulders on the couch, one foot planted", "Hips all the way up to a flat tabletop", "Add the dumbbell back once 12 feels easy"],
+          avoid: ["Looking up at the ceiling"] }
+      ] }
   ];
 
   // Ad-hoc strength bank — fixed order, warm-up gate first (PRD §6).
@@ -206,13 +360,19 @@
     { id: "deadlift",   name: "Deadlifts" }
   ];
 
+  // Keys may carry a progression level ("side_plank@2"). Fall back toward the
+  // base drawing, always preferring level-correct art over style-correct art —
+  // the picture matching the movement matters more than matching the set.
+  function baseOf(key) { return key.indexOf("@") === -1 ? key : key.slice(0, key.indexOf("@")); }
+
   window.PF_IMAGES = {
-    illustration: function (exId) {
-      return ILLUST[exId] || "";
+    illustration: function (key) {
+      return ILLUST[key] || ILLUST[baseOf(key)] || "";
     },
     // "Color" set — bundled flat colored figures (js/illustrations-color.js).
-    color: function (exId) {
-      return (window.PF_COLOR_ART || {})[exId] || ILLUST[exId] || "";
+    color: function (key) {
+      var C = window.PF_COLOR_ART || {};
+      return C[key] || ILLUST[key] || C[baseOf(key)] || ILLUST[baseOf(key)] || "";
     },
     // Photo set: an <img> pointing at photos/<id>.jpg. If the file is absent
     // (paid-stock placeholder slots), the onerror handler swaps in the

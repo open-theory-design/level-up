@@ -1,7 +1,7 @@
 // Level Up service worker — offline shell (PRD §2.2).
 // Static assets are cached; Supabase API calls always go to the network.
 
-var CACHE = "levelup-v15"; // bumped for the notification rebuild (BUILD-SPEC-notifications.md)
+var CACHE = "levelup-v16"; // bumped for progression ladders (BUILD-SPEC-progression-ladders.md)
 var ASSETS = [
   "./",
   "./index.html",

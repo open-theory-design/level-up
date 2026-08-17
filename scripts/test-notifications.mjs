@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import {
   computeDerived, weekProgress, dueNotifications, slotCouldFire,
   notifySettings, keyDayBody, warningCopy, recapCopy, weekIndexFor,
-  mondayOf, addDaysStr
+  mondayOf, addDaysStr, progressionFromRows, LADDER
 } from "../supabase/functions/send-reminders/logic.js";
 
 // js/streak.js is a browser IIFE that hangs itself off `window` — give it one.
@@ -249,6 +249,69 @@ section("Settings");
   eq("notify block wins", modern.keyDayTime, "07:30");
   eq("missing fields fall back", modern.warningTime, "18:00");
   eq("no settings at all still works", notifySettings(null).keyDayTime, "09:00");
+}
+
+// ---------------- 7b. Progression ladders (server side) ----------------
+
+section("Progression ladders");
+{
+  // Two easy, complete side-plank sessions; lvl marks the ladder level.
+  const spRow = (date, lvl) => ({
+    log_date: date,
+    sets_log: { side_plank: Object.assign({ s: [40, 40, 40, 40], diff: "easy" }, lvl ? { lvl } : {}) }
+  });
+  const rows0 = [spRow(D(3)), spRow(D(2))]; // newest first, level 0
+  const HOLD40 = { side_plank: 40 };
+
+  // Level 0, at the 40s cap -> upgrade push naming the CURRENT movement.
+  eq("upgrade advice at the cap",
+    progressionFromRows(rows0, HOLD40, {}),
+    "Side Plank: next level unlocked — take the upgrade in your next flow.");
+
+  // Below the cap -> within-level advice, never an upgrade.
+  ok("below the cap -> add seconds",
+    /add 5 seconds/.test(progressionFromRows(rows0, { side_plank: 30 }, {})));
+
+  // Upgraded to level 1 but the easy sessions are level-0 records -> silence.
+  eq("old-level records never re-qualify",
+    progressionFromRows(rows0, HOLD40, { side_plank: 1 }), null);
+
+  // Two easy sessions AT level 1 -> the next upgrade offer.
+  const rows1 = [spRow(D(10), 1), spRow(D(9), 1)];
+  eq("re-qualified at level 1 -> next upgrade",
+    progressionFromRows(rows1, HOLD40, { side_plank: 1 }),
+    "Side Plank — Top Leg Raised: next level unlocked — take the upgrade in your next flow.");
+
+  // At level 1 the holds were reset to 30 (override cleared) -> add seconds first.
+  ok("after upgrade, holds climb back to the cap first",
+    /Side Plank — Top Leg Raised: add 5 seconds/.test(progressionFromRows(rows1, {}, { side_plank: 1 })));
+
+  // Top of the ladder -> terminal advice, never an upgrade.
+  const rows2 = [spRow(D(20), 2), spRow(D(19), 2)];
+  ok("top of the ladder -> terminal advice",
+    /Feet-elevated at 40s/.test(progressionFromRows(rows2, HOLD40, { side_plank: 2 })));
+
+  // Reps ladder (no cap gate): dead bugs easy² at level 0 -> upgrade.
+  const dbRows = [
+    { log_date: D(3), sets_log: { deadbugs: { s: [20, 20], diff: "easy" } } },
+    { log_date: D(2), sets_log: { deadbugs: { s: [20, 20], diff: "easy" } } }
+  ];
+  eq("reps exercise upgrades without a cap gate",
+    progressionFromRows(dbRows, {}, {}),
+    "Dead Bugs: next level unlocked — take the upgrade in your next flow.");
+
+  // PARITY: the server's LADDER names must exactly match the client's `levels`
+  // arrays in js/exercises.js — the push must never name a level that doesn't
+  // exist in the app.
+  const exSrc = readFileSync(new URL("../js/exercises.js", import.meta.url), "utf8");
+  const exWin = {};
+  new Function("window", exSrc)(exWin);
+  const laddered = exWin.PF_EXERCISES.filter((x) => x.levels);
+  eq("client ladder count", laddered.length, 5);
+  for (const ex of laddered) {
+    const clientNames = ex.levels.map((l) => l.name);
+    eq("ladder parity: " + ex.id, JSON.stringify(LADDER[ex.id]), JSON.stringify(clientNames));
+  }
 }
 
 // ---------------- 8. PARITY with js/streak.js ----------------

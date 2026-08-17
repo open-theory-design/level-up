@@ -108,12 +108,35 @@
 
   function touch(entry) { entry.updatedAt = new Date().toISOString(); }
 
+  // ---------------- Progression levels (BUILD-SPEC-progression-ladders) ----------------
+  // An exercise's current ladder position lives in synced settings; the ladder
+  // itself (per-level name/dose/tips/art) is defined on the exercise. Level 0
+  // is the base definition — levels[0] describes the first upgrade.
+
+  function levelOf(ex) { return (state.settings.exLevel || {})[ex.id] || 0; }
+  function maxLevel(ex) { return (ex.levels || []).length; }
+
+  // The exercise as the user currently experiences it: base fields overlaid
+  // with the active level's name/dose/tips/avoid. id and track never change.
+  function levelView(ex) {
+    var lvl = levelOf(ex);
+    if (!lvl || !ex.levels) return ex;
+    return Object.assign({}, ex, ex.levels[Math.min(lvl, ex.levels.length) - 1]);
+  }
+
+  // Art key for the active level ("side_plank@2"); PF_IMAGES falls back to the
+  // base drawing when a variant is missing.
+  function artKey(ex) {
+    var lvl = levelOf(ex);
+    return lvl ? ex.id + "@" + lvl : ex.id;
+  }
+
   // ---------------- Images ----------------
 
   function imageFor(ex) {
-    if (state.settings.imageStyle === "photos") return PF_IMAGES.photoHTML(ex);
-    if (state.settings.imageStyle === "color") return PF_IMAGES.color(ex.id);
-    return PF_IMAGES.illustration(ex.id);
+    if (state.settings.imageStyle === "photos") return PF_IMAGES.photoHTML(levelView(ex));
+    if (state.settings.imageStyle === "color") return PF_IMAGES.color(artKey(ex));
+    return PF_IMAGES.illustration(artKey(ex));
   }
 
   // ---------------- Toast ----------------
@@ -451,11 +474,11 @@
   // blank box.
   function thumbFor(ex) {
     if (state.settings.imageStyle === "photos") {
-      return PF_IMAGES.illustration(ex.id) +
+      return PF_IMAGES.illustration(artKey(ex)) +
         '<img class="thumb-img" src="photos/' + ex.id + '.jpg" alt="" onerror="this.remove()">';
     }
-    if (state.settings.imageStyle === "color") return PF_IMAGES.color(ex.id);
-    return PF_IMAGES.illustration(ex.id);
+    if (state.settings.imageStyle === "color") return PF_IMAGES.color(artKey(ex));
+    return PF_IMAGES.illustration(artKey(ex));
   }
 
   function renderFlowCard() {
@@ -467,12 +490,13 @@
       if (g) items += '<div class="check-group">' + esc(g.label) + "</div>";
       var v = done[ex.id] || 0;
       var mark = v >= 2 ? "✓✓" : v >= 1 ? "✓" : "";
+      var lv = levelView(ex);
       items +=
         '<button class="check-item s' + v + '" data-action="cycle-exercise" data-ex="' + ex.id + '">' +
           '<span class="check-thumb">' + thumbFor(ex) + "</span>" +
-          '<span class="check-main"><span class="check-name">' + esc(ex.name) +
+          '<span class="check-main"><span class="check-name">' + esc(lv.name) +
             (progressionState(ex) ? ' <span class="up-chip" title="Ready to progress">↑</span>' : "") + "</span>" +
-          '<span class="check-dose">' + esc(ex.dose) + "</span></span>" +
+          '<span class="check-dose">' + esc(lv.dose) + "</span></span>" +
           '<span class="check-box">' + mark + "</span>" +
         "</button>";
     });
@@ -680,6 +704,9 @@
 
   var repVals = {};   // exId -> [pending stepper value per set]
   var holdRun = null; // { exId, set, endAt, pausedLeftMs, paused, timer, lastShown }
+  // "Not this time" on an upgrade offer — session-scoped by design: nothing is
+  // persisted, so the offer reappears next flow run (spec: ask again next time).
+  var upgradeDismissed = {};
 
   function stopHold() {
     if (holdRun && holdRun.timer) clearInterval(holdRun.timer);
@@ -699,12 +726,14 @@
   function allLogged(exId, n) {
     return setsView(exId, n).every(function (v) { return v != null; });
   }
-  function lastSetsFor(exId) { // most recent prior day with data for this exercise
+  function lastSetsFor(ex) { // most recent prior day with data at the CURRENT level
     var t = today();
+    var lvl = levelOf(ex);
     for (var i = 1; i <= 60; i++) {
       var e = state.dayLog[PFStreak.addDays(t, -i)];
-      var rec = e && e.sets && e.sets[exId];
-      if (rec && rec.s && rec.s.some(function (v) { return v != null; })) return rec;
+      var rec = e && e.sets && e.sets[ex.id];
+      if (rec && rec.s && (rec.lvl || 0) === lvl &&
+          rec.s.some(function (v) { return v != null; })) return rec;
     }
     return null;
   }
@@ -719,33 +748,53 @@
   // ---- Progression rules (keep in sync with supabase/functions/send-reminders/logic.js) ----
   // Group A (control drills): the Felt tap is the signal — reps are weak data.
   // Group B (loadable): top-of-range reps on both sets is required — add LOAD first.
-  // side_plank: time is capped at 40s; below it add time, at it progress the variation.
+  // side_plank: time is capped at 40s; below it add time, at it the LADDER takes over.
   // Mobility holds (quad_roll, psoas, couch) never trigger progression.
   var PROGRESSION_GROUP = { deadbugs: "A", bird_dogs: "A", clamshells: "B", hip_thrusts: "B", side_plank: "S" };
-  function progressionAdvice(exId, effSecs) {
-    return {
-      deadbugs: "Dead Bugs are getting easy — slow each lower to 4s or add a 2s pause. Don't add reps.",
-      bird_dogs: "Bird Dogs are getting easy — add a 3s pause at full reach, or slow the return.",
-      clamshells: "Clamshells: move up to the next band. Out of bands? Add a 2s squeeze at the top.",
-      hip_thrusts: "Hip Thrusts: time to add load — a dumbbell or plate across your hips.",
-      side_plank: effSecs >= 40
-        ? "Side Plank: 40s is the cap — progress the variation (top leg raised, or feet elevated)."
-        : "Side Plank: add 5 seconds — use the + beside the timer."
-    }[exId] || null;
-  }
-  // lastTwo = the two most recent COMPLETED records [{s, diff}, …] (newest first).
-  function progressionFor(exId, lastTwo, meta) {
-    var group = PROGRESSION_GROUP[exId];
-    if (!group || !lastTwo || lastTwo.length < 2) return null;
-    var bothEasy = lastTwo.every(function (r) { return r.diff === "easy"; });
-    if (!bothEasy) return null;
-    if (group === "B") {
-      var atTarget = lastTwo.every(function (r) {
-        return r.s.every(function (v) { return v != null && v >= meta.target; });
-      });
-      if (!atTarget) return null;
+
+  // Advice shown once an exercise has topped out its ladder.
+  var TERMINAL_ADVICE = {
+    side_plank: "Feet-elevated at 40s — hold it there, or add a plate on your hip.",
+    deadbugs: "Top of the Dead Bug ladder — slow the lowers even more, or a touch more weight.",
+    bird_dogs: "Top of the Bird Dog ladder — slower, stricter, longer pauses.",
+    clamshells: "Top of the band ladder — chase slower, stricter reps.",
+    hip_thrusts: "Add weight to the single-leg version, 2kg at a time."
+  };
+
+  // Two easy sessions in a row at the CURRENT level. Records from other levels
+  // never count — an upgrade restarts qualification from scratch.
+  function progressionReady(ex) {
+    if (!ex.track || !PROGRESSION_GROUP[ex.id]) return false;
+    var lastTwo = lastTwoSessions(ex.id, ex.track.sets, levelOf(ex));
+    if (lastTwo.length < 2) return false;
+    if (!lastTwo.every(function (r) { return r.diff === "easy"; })) return false;
+    if (PROGRESSION_GROUP[ex.id] === "B") {
+      var target = ex.track.target;
+      if (!lastTwo.every(function (r) {
+        return r.s.every(function (v) { return v != null && v >= target; });
+      })) return false;
     }
-    return progressionAdvice(exId, meta.effSecs || 0);
+    return true;
+  }
+
+  // The level an upgrade would move to, or null. Holds only ladder up once
+  // their time cap is reached — below it, add seconds first.
+  function nextLevel(ex) {
+    var lvl = levelOf(ex);
+    if (!ex.levels || lvl >= ex.levels.length) return null;
+    if (ex.track && ex.track.type === "hold" && holdSecsFor(ex) < ex.track.max) return null;
+    return ex.levels[lvl];
+  }
+
+  // Display string for the ↑ chips, the easy-tap toast and the advice line.
+  function progressionState(ex) {
+    if (!progressionReady(ex)) return null;
+    var nx = nextLevel(ex);
+    if (nx) return "Ready for the next level: " + nx.name;
+    if (ex.track.type === "hold" && holdSecsFor(ex) < ex.track.max) {
+      return levelView(ex).name + ": add 5 seconds — use the + beside the timer.";
+    }
+    return TERMINAL_ADVICE[ex.id] || null;
   }
   // Recent logged sessions for an exercise, oldest → newest.
   // completeOnly = every set logged (what the progression rules require).
@@ -774,17 +823,13 @@
     return out.reverse(); // oldest → newest
   }
 
-  // The last two completed sessions for an exercise (today included when complete),
-  // newest first — the shape the progression rules expect.
-  function lastTwoSessions(exId, nSets) {
-    return sessionsFor(exId, 2, nSets, true).map(function (s) { return s.rec; }).reverse();
-  }
-  function progressionState(ex) {
-    if (!ex.track) return null;
-    return progressionFor(ex.id, lastTwoSessions(ex.id, ex.track.sets), {
-      target: ex.track.target,
-      effSecs: ex.track.type === "hold" ? holdSecsFor(ex) : 0
+  // The last two completed sessions AT the given ladder level (today included
+  // when complete), newest first — the shape the progression rules expect.
+  function lastTwoSessions(exId, nSets, lvl) {
+    var matched = sessionsFor(exId, 12, nSets, true).filter(function (s) {
+      return (s.rec.lvl || 0) === (lvl || 0);
     });
+    return matched.slice(-2).map(function (s) { return s.rec; }).reverse();
   }
 
   function logSet(ex, idx, val) {
@@ -792,11 +837,16 @@
     e.sets = e.sets || {};
     e.sets[ex.id] = e.sets[ex.id] || { s: [] };
     e.sets[ex.id].s[idx] = val;
+    // Stamp the ladder level so history stays honest: a 30s hold at level 2 and
+    // a 30s hold at level 0 are different achievements, and qualification only
+    // counts sessions at the current level.
+    var lvl = levelOf(ex);
+    if (lvl) e.sets[ex.id].lvl = lvl;
     if (allLogged(ex.id, ex.track.sets)) {
       e.exercisesDone = e.exercisesDone || {};
       e.exercisesDone[ex.id] = Math.max(e.exercisesDone[ex.id] || 0, 1);
       e.reps = PFStreak.repsFromExercises(e.exercisesDone, exerciseIds());
-      toast(ex.name + " done ✓");
+      toast(levelView(ex).name + " done ✓");
     }
     touch(e); save(); render();
   }
@@ -846,7 +896,7 @@
   }
 
   function trackerHint(ex) {
-    var last = lastSetsFor(ex.id);
+    var last = lastSetsFor(ex);
     if (!last) return "";
     var tr = ex.track;
     var unit = tr.type === "hold" ? "s" : "";
@@ -958,18 +1008,34 @@
     }
 
     if (complete) {
-      var levelUp = progressionState(ex);
-      if (levelUp) h += '<div class="tk-levelup">⬆ ' + esc(levelUp) + "</div>";
-      h += '<div class="tk-donetext">✓ ' + esc(ex.name) + " done</div>" + feltHTML(ex, rec);
+      // Upgrade offer (BUILD-SPEC-progression-ladders §4): when the exercise
+      // qualifies and a next level exists, the advice line becomes a decision.
+      // Suppressed during practice runs — settings changes wouldn't survive.
+      var nx = !practiceBackup && !upgradeDismissed[ex.id] && progressionReady(ex) ? nextLevel(ex) : null;
+      if (nx) {
+        h += '<div class="tk-upgrade">' +
+          '<div class="tk-up-kicker">⬆ Ready for the next level</div>' +
+          '<div class="tk-up-name">' + esc(nx.name) + "</div>" +
+          (nx.sub ? '<div class="tk-up-sub">' + esc(nx.sub) + "</div>" : "") +
+          '<div class="tk-up-actions">' +
+            '<button class="tk-up-go" data-action="level-up">Upgrade</button>' +
+            '<button class="tk-up-later" data-action="level-later">Not this time</button>' +
+          "</div></div>";
+      } else if (!upgradeDismissed[ex.id]) { // dismissed = quiet for this run
+        var levelUp = progressionState(ex);
+        if (levelUp) h += '<div class="tk-levelup">⬆ ' + esc(levelUp) + "</div>";
+      }
+      h += '<div class="tk-donetext">✓ ' + esc(levelView(ex).name) + " done</div>" + feltHTML(ex, rec);
     }
     return h + "</div>";
   }
 
   function renderFlow() {
     var ex = PF_EXERCISES[flowIndex];
+    var vw = levelView(ex); // the level's name/dose/tips — everything else is ex
     var lastOne = flowIndex === PF_EXERCISES.length - 1;
     var pct = Math.round(((flowIndex + 1) / PF_EXERCISES.length) * 100);
-    var showDose = ex.dose && ex.dose.toLowerCase() !== "self-paced";
+    var showDose = vw.dose && vw.dose.toLowerCase() !== "self-paced";
     var notFirst = flowIndex > 0;
     var timing = state.settings.timingEnabled;
     var clockIcon =
@@ -995,9 +1061,9 @@
         (practiceBackup ? '<div class="practice-bar">Practice run · nothing is saved</div>' : "") +
         '<div class="flow-body' + (ex.track ? " tracked" : "") + '">' +
           '<div class="flow-img">' + imageFor(ex) + "</div>" +
-          '<h2 class="flow-name">' + esc(ex.name) + "</h2>" +
-          (showDose ? '<div class="flow-reps">' + esc(ex.dose) + "</div>" : "") +
-          renderFlowTips(ex) +
+          '<h2 class="flow-name">' + esc(vw.name) + "</h2>" +
+          (showDose ? '<div class="flow-reps">' + esc(vw.dose) + "</div>" : "") +
+          renderFlowTips(vw) +
           (ex.track ? renderTracker(ex) : "") +
         "</div>" +
         (ex.track ? "" : '<div class="flow-hint">Tap anywhere, or press → / space. Press ← to go back.</div>') +
@@ -1203,6 +1269,7 @@
     var anyTracked = false;
     var rows = PF_EXERCISES.map(function (ex) {
       var tr = ex.track;
+      var lv = levelView(ex);
       var right, sub = "";
 
       if (tr) {
@@ -1210,6 +1277,7 @@
         var sessions = sessionsFor(ex.id, 6, tr.sets, false);
         if (sessions.length) anyTracked = true;
         sub = tr.sets + " × " + (isHold ? holdSecsFor(ex) + "s" : tr.target);
+        if (levelOf(ex)) sub += " · Level " + (levelOf(ex) + 1) + " of " + (maxLevel(ex) + 1);
 
         if (sessions.length >= 2) {
           // Totals for both types — the structure-invariant comparison metric.
@@ -1230,7 +1298,7 @@
         right = '<span class="ex-count">' + (d.exCounts[ex.id] || 0) + "</span>";
       }
 
-      return '<div class="ex-row"><span class="ex-main"><span class="ex-name">' + esc(ex.name) + "</span>" +
+      return '<div class="ex-row"><span class="ex-main"><span class="ex-name">' + esc(lv.name) + "</span>" +
         (sub ? '<span class="ex-sub">' + esc(sub) + "</span>" : "") +
         '</span><span class="ex-right">' + right + "</span></div>";
     }).join("");
@@ -1260,7 +1328,7 @@
 
     var rows = PF_EXERCISES.map(function (ex) {
       var e = tm.ex[ex.id];
-      return '<div class="excount-row"><span>' + esc(ex.name) + '</span><span class="v">' +
+      return '<div class="excount-row"><span>' + esc(levelView(ex).name) + '</span><span class="v">' +
         (e && e.n ? fmtDur(e.ms / e.n) : "—") + "</span></div>";
     }).join("");
 
@@ -1671,6 +1739,7 @@
     flowIndex = 0;
     flowStartReps = (state.dayLog[today()] || {}).reps || 0;
     repVals = {}; // fresh stepper values each run
+    upgradeDismissed = {}; // a dismissed upgrade offer returns every new session
     stopHold();
     timingStart();
     view = "flow";
@@ -1818,6 +1887,22 @@
     }
     else if (a === "toggle-push") { if (pushState.subscribed) disablePush(); else enablePush(); }
     else if (a === "test-push") sendTestPush();
+    else if (a === "level-up") {
+      var fxu = PF_EXERCISES[flowIndex];
+      state.settings.exLevel = state.settings.exLevel || {};
+      state.settings.exLevel[fxu.id] = levelOf(fxu) + 1;
+      // Holds restart at the level's baseline: the new movement is harder, so
+      // any ±5s override earned on the old one no longer applies.
+      if (state.settings.holdSecs) delete state.settings.holdSecs[fxu.id];
+      state.settingsUpdatedAt = new Date().toISOString();
+      save(); render();
+      toast(levelView(fxu).name + " unlocked ✓" +
+        (fxu.track && fxu.track.type === "hold" ? " — holds reset to " + fxu.track.secs + "s" : ""));
+    }
+    else if (a === "level-later") {
+      upgradeDismissed[PF_EXERCISES[flowIndex].id] = true;
+      render();
+    }
     else if (a === "toggle-notify" || a === "toggle-recap") {
       var key = a === "toggle-notify" ? "enabled" : "recapEnabled";
       state.settings.notify[key] = !state.settings.notify[key];
