@@ -78,6 +78,21 @@
       '<path d="M92 48 Q120 58 148 48" ' + T + "/>" +                 // band between hands
       '<path d="M170 46 L170 80 M170 46 l-5 8 M170 46 l5 8 M170 80 l-5 -8 M170 80 l5 -8" ' + T + "/>"
     ),
+    // TOP-DOWN view — the only angle where the rotation actually reads. Looking
+    // straight down at the mat: knees stay parked on one side while the top arm
+    // sweeps 180° from the dashed start position to the far side. Profile views
+    // hide the whole movement behind the torso.
+    open_book: svg(
+      '<rect x="26" y="26" width="188" height="98" rx="10" fill="none" ' + G + "/>" +  // mat, from above
+      '<circle cx="66" cy="75" r="11" ' + S + "/>" +                 // head
+      '<path d="M82 75 L172 75" ' + S + "/>" +                       // spine along the mat
+      '<path d="M172 75 L156 108" ' + S + "/>" +                     // thigh — knees drawn up toward the chest
+      '<path d="M156 108 L186 116" ' + S + "/>" +                    // shin folds back, knees stacked
+      '<path d="M90 75 L82 116" ' + S + "/>" +                       // bottom arm stays on the floor
+      '<path d="M90 75 L124 40" ' + S + "/>" +                       // top arm opening away
+      '<path d="M132 66 Q152 52 136 34" ' + T + "/>" +               // it keeps travelling
+      '<path d="M136 34 l-7 8 M136 34 l9 4" ' + T + "/>"             // arrowhead
+    ),
     // Prone on forearms, roller under the front of one thigh; double arrow shows
     // the slow back-and-forth travel from hip to just above the knee.
     quad_roll: svg(
@@ -301,6 +316,7 @@
     { id: "wall_angels",        name: "Wall Angels",                 dose: "self-paced",         tips: ["Press your lower back flat against the wall"], avoid: ["Letting your ribs flare out"], nicheStock: true },
     { id: "chin_tucks",         name: "Chin Tucks",                  dose: "hold 3–5s",     tips: ["Pull your head straight back, like making a double chin"] },
     { id: "band_raises",        name: "Band Raises",                 dose: "self-paced",         tips: ["Hold a band with both hands", "Raise both arms up, then lower with control", "Keep the band under tension throughout"], nicheStock: true },
+    { id: "open_book",          name: "Open Book",                   dose: "8–10 per side",      tips: ["Lie on your side, knees bent and stacked", "Arms together out in front, then open the top arm up and back", "Follow your hand with your eyes", "Breathe out as you open"], avoid: ["Letting your knees lift or your pelvis follow the rotation"], nicheStock: true },
     { id: "quad_roll",          name: "Quad Foam Roll",              dose: "3 × 30s per leg",  track: { type: "hold", sets: 6, secs: 30, min: 20, max: 40 }, tips: ["Roll slowly — 2–4 seconds per pass", "Work from the hip down to just above the knee", "Pause on tender spots and keep breathing"], avoid: ["Rolling over your kneecap or hip bone", "Going past 2 minutes on one leg"] },
     { id: "psoas_stretch",      name: "Kneeling Psoas Stretch",      dose: "2 × 45s per leg", tips: ["Squeeze the glute of the stretching leg", "Push your hip forward"], avoid: ["Arching your lower back"] },
     { id: "couch_stretch",      name: "Couch Stretch",               dose: "2 × 45s per leg", tips: ["Rest your rear shin flat up a wall or couch", "Front foot planted, knee over ankle", "Squeeze the glute and tuck your pelvis under"], avoid: ["Arching your lower back", "Forcing into sharp knee pain"] },

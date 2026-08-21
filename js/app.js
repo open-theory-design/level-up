@@ -57,13 +57,17 @@
 
   var DOW_LETTERS = ["S", "M", "T", "W", "T", "F", "S"];
   var LIFT_PLACEHOLDER_HINTS = { hip_thrust: [70, 10], bulgarian: [20, 8], squat: [80, 6], deadlift: [100, 5] };
-  // Section headers in the daily-flow list: exercises 1–6 target the rounded-
-  // shoulder "hunch" (upper crossed); 7–15 target the hips/glutes (lower
-  // crossed). The divide falls before the Quad Foam Roll (index 6), which opens
-  // the hip block: soft tissue first, then the hip-flexor stretches.
+  // Section headers in the daily-flow list: exercises 1–7 target the rounded-
+  // shoulder "hunch" (upper crossed); 8–16 target the hips/glutes (lower
+  // crossed). Open Book closes the upper block (index 6) — it's the rotation
+  // counterpart to the lat/pec/wall-angel extension work, and it's placed after
+  // them so the rotation happens into freed-up tissue. It also lands exactly on
+  // the session's single standing→floor transition. The divide then falls before
+  // the Quad Foam Roll (index 7), which opens the hip block: soft tissue first,
+  // then the hip-flexor stretches.
   var FLOW_GROUPS = [
     { at: 0, label: "Posture & shoulders" },
-    { at: 6, label: "Hips & glutes" }
+    { at: 7, label: "Hips & glutes" }
   ];
 
   function esc(s) {
